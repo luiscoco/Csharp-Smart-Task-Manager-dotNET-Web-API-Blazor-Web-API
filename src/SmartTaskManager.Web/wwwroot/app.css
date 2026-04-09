@@ -163,7 +163,7 @@ p {
 }
 
 .grid--metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .panel,
@@ -375,6 +375,26 @@ p {
     color: var(--color-muted);
 }
 
+.toolbar--filters {
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.toolbar__group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+}
+
+.toolbar__group--actions {
+    justify-content: flex-end;
+}
+
+.field--compact {
+    min-width: 12rem;
+}
+
 .callout {
     padding: 1rem 1.15rem;
     border-radius: 1rem;
@@ -470,5 +490,16 @@ p {
     .task-card__footer,
     .user-card {
         flex-direction: column;
+    }
+
+    .toolbar--filters,
+    .toolbar__group--actions {
+        align-items: stretch;
+        justify-content: flex-start;
+    }
+
+    .field--compact {
+        min-width: 0;
+        width: 100%;
     }
 }

@@ -1,0 +1,150 @@
+@using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
+
+<article class="task-card">
+    <div class="task-card__header">
+        <div>
+            <div class="task-card__title-row">
+                <h3>@Task.Title</h3>
+                <StatusBadge Text="@FormatStatus(Task.Status)" Tone="@GetStatusTone(Task.Status)" />
+                <StatusBadge Text="@Task.Priority.ToString()" Tone="@GetPriorityTone(Task.Priority)" />
+                @if (Task.IsOverdue)
+                {
+                    <StatusBadge Text="Overdue" Tone="danger" />
+                }
+            </div>
+
+            <div class="task-card__meta">
+                <span>Due @Task.DueDate.ToLocalTime().ToString("dd MMM yyyy")</span>
+                <span>@Task.TaskType</span>
+                <span>@Task.CategoryName</span>
+                @if (ShowOwner && !string.IsNullOrWhiteSpace(OwnerName))
+                {
+                    <span>Owner @OwnerName</span>
+                }
+                @if (ShowHistoryCount)
+                {
+                    <span>@Task.HistoryCount history entries</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (ShowDescription)
+    {
+        <p class="task-card__description">@GetTaskDescription(Task)</p>
+    }
+
+    @if (ShowActions)
+    {
+        <div class="task-card__actions">
+            @if (ShowDetailsLink)
+            {
+                <a class="button button--ghost button--small" href="@DetailsUrl">Details</a>
+            }
+
+            @if (Task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived)
+            {
+                <button class="button button--ghost button--small" type="button" @onclick="CompleteAsync" disabled="@IsBusy">
+                    Complete
+                </button>
+            }
+
+            @if (Task.Status != UiTaskStatus.Archived)
+            {
+                <button class="button button--ghost button--small" type="button" @onclick="ArchiveAsync" disabled="@IsBusy">
+                    Archive
+                </button>
+            }
+        </div>
+    }
+    else if (ShowDetailsLink)
+    {
+        <div class="task-card__actions">
+            <a class="button button--ghost button--small" href="@DetailsUrl">View details</a>
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired]
+    public TaskItem Task { get; set; } = null!;
+
+    [Parameter]
+    public string? OwnerName { get; set; }
+
+    [Parameter]
+    public bool ShowOwner { get; set; }
+
+    [Parameter]
+    public bool ShowHistoryCount { get; set; }
+
+    [Parameter]
+    public bool ShowDescription { get; set; } = true;
+
+    [Parameter]
+    public bool ShowActions { get; set; }
+
+    [Parameter]
+    public bool ShowDetailsLink { get; set; } = true;
+
+    [Parameter]
+    public bool IsBusy { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnComplete { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnArchive { get; set; }
+
+    private string DetailsUrl => $"/tasks/{Task.Id}";
+
+    private Task CompleteAsync()
+    {
+        return OnComplete.InvokeAsync(Task.Id);
+    }
+
+    private Task ArchiveAsync()
+    {
+        return OnArchive.InvokeAsync(Task.Id);
+    }
+
+    private static string GetTaskDescription(TaskItem task)
+    {
+        return string.IsNullOrWhiteSpace(task.Description)
+            ? "No description was provided for this task."
+            : task.Description;
+    }
+
+    private static string GetPriorityTone(TaskPriority priority)
+    {
+        return priority switch
+        {
+            TaskPriority.Low => "neutral",
+            TaskPriority.Medium => "warning",
+            TaskPriority.High => "accent",
+            TaskPriority.Critical => "danger",
+            _ => "neutral"
+        };
+    }
+
+    private static string GetStatusTone(UiTaskStatus status)
+    {
+        return status switch
+        {
+            UiTaskStatus.Pending => "neutral",
+            UiTaskStatus.InProgress => "accent",
+            UiTaskStatus.Completed => "success",
+            UiTaskStatus.Archived => "warning",
+            _ => "neutral"
+        };
+    }
+
+    private static string FormatStatus(UiTaskStatus status)
+    {
+        return status switch
+        {
+            UiTaskStatus.InProgress => "In Progress",
+            _ => status.ToString()
+        };
+    }
+}

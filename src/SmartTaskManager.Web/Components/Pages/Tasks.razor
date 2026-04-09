@@ -1,5 +1,5 @@
 @page "/tasks"
-@using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
+@implements IDisposable
 @inject TasksApiClient TasksApiClient
 @inject UserSession UserSession
 
@@ -9,7 +9,7 @@
     <PageHeader
         Eyebrow="Tasks"
         Title="Task workspace"
-        Description="Browse the selected user's tasks, apply one API-supported filter, and trigger simple lifecycle actions.">
+        Description="Browse tasks for the selected user and filter them by status or priority without moving HTTP logic into the page.">
         <Actions>
             <a class="button button--secondary" href="/tasks/create">Create task</a>
         </Actions>
@@ -47,20 +47,14 @@
                     <p class="panel__eyebrow">Task list</p>
                     <h2 class="panel__title">@UserSession.CurrentUser!.UserName's tasks</h2>
                 </div>
-
-                <div class="toolbar">
-                    <label class="toolbar__label" for="taskFilter">Filter</label>
-                    <select id="taskFilter" class="field__input" @bind="_selectedFilter">
-                        @foreach (TaskFilterOption option in Enum.GetValues<TaskFilterOption>())
-                        {
-                            <option value="@option">@GetFilterLabel(option)</option>
-                        }
-                    </select>
-                    <button class="button button--ghost button--small" type="button" @onclick="LoadTasksAsync" disabled="@_isLoading">
-                        Apply
-                    </button>
-                </div>
             </div>
+
+            <TaskFilterBar
+                Filter="_filter"
+                Disabled="_isLoading"
+                HelpText="Use the service layer to filter by status, priority, or both."
+                OnApply="LoadTasksAsync"
+                OnReset="LoadTasksAsync" />
 
             @if (_isLoading)
             {
@@ -70,7 +64,7 @@
             {
                 <EmptyState
                     Title="No tasks matched the current filter"
-                    Description="Create a task or clear the filter to see more work items.">
+                    Description="Create a task or clear the active filters to see more work items.">
                     <Actions>
                         <a class="button" href="/tasks/create">Create task</a>
                     </Actions>
@@ -81,56 +75,15 @@
                 <div class="task-list">
                     @foreach (TaskItem task in _tasks)
                     {
-                        <article class="task-card">
-                            <div class="task-card__header">
-                                <div>
-                                    <div class="task-card__title-row">
-                                        <h3>@task.Title</h3>
-                                        <StatusBadge Text="@task.Status.ToString()" Tone="@GetStatusTone(task.Status)" />
-                                        <StatusBadge Text="@task.Priority.ToString()" Tone="@GetPriorityTone(task.Priority)" />
-                                        @if (task.IsOverdue)
-                                        {
-                                            <StatusBadge Text="Overdue" Tone="danger" />
-                                        }
-                                    </div>
-
-                                    <div class="task-card__meta">
-                                        <span>Due @task.DueDate.ToLocalTime().ToString("dd MMM yyyy")</span>
-                                        <span>@task.TaskType</span>
-                                        <span>@task.CategoryName</span>
-                                        <span>@task.HistoryCount history entries</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <p class="task-card__description">@GetTaskDescription(task)</p>
-
-                            <div class="task-card__actions">
-                                <a class="button button--ghost button--small" href="@($"/tasks/{task.Id}")">Details</a>
-
-                                @if (task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived)
-                                {
-                                    <button
-                                        class="button button--ghost button--small"
-                                        type="button"
-                                        @onclick="@(() => CompleteTaskAsync(task.Id))"
-                                        disabled="@(_busyTaskId == task.Id)">
-                                        Complete
-                                    </button>
-                                }
-
-                                @if (task.Status != UiTaskStatus.Archived)
-                                {
-                                    <button
-                                        class="button button--ghost button--small"
-                                        type="button"
-                                        @onclick="@(() => ArchiveTaskAsync(task.Id))"
-                                        disabled="@(_busyTaskId == task.Id)">
-                                        Archive
-                                    </button>
-                                }
-                            </div>
-                        </article>
+                        <TaskCard
+                            Task="task"
+                            OwnerName="@UserSession.CurrentUser!.UserName"
+                            ShowOwner="true"
+                            ShowHistoryCount="true"
+                            ShowActions="true"
+                            IsBusy="@(_busyTaskId == task.Id)"
+                            OnComplete="CompleteTaskAsync"
+                            OnArchive="ArchiveTaskAsync" />
                     }
                 </div>
             }
@@ -139,16 +92,22 @@
 </div>
 
 @code {
+    private readonly TaskListViewFilter _filter = new();
     private bool _isLoading = true;
     private Guid? _busyTaskId;
     private string? _errorMessage;
     private string? _statusMessage;
-    private TaskFilterOption _selectedFilter;
     private IReadOnlyCollection<TaskItem> _tasks = Array.Empty<TaskItem>();
 
     protected override async Task OnInitializedAsync()
     {
+        UserSession.Changed += HandleSessionChanged;
         await LoadTasksAsync();
+    }
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
     }
 
     private async Task LoadTasksAsync()
@@ -167,10 +126,14 @@
 
         try
         {
-            _tasks = await TasksApiClient.ListTasksAsync(
-                UserSession.CurrentUser.Id,
-                UserSession.BearerToken,
-                BuildFilter());
+            _tasks = (await TasksApiClient.ListTasksAsync(
+                    UserSession.CurrentUser.Id,
+                    UserSession.BearerToken,
+                    _filter.Status,
+                    _filter.Priority))
+                .OrderBy(task => task.DueDate)
+                .ThenBy(task => task.Title)
+                .ToList();
         }
         catch (Exception exception)
         {
@@ -234,6 +197,11 @@
         }
     }
 
+    private void HandleSessionChanged()
+    {
+        _ = InvokeAsync(LoadTasksAsync);
+    }
+
     private bool TryGetSession(out Guid userId, out string? accessToken)
     {
         if (UserSession.CurrentUser is not null && UserSession.BearerToken is not null)
@@ -248,68 +216,6 @@
         return false;
     }
 
-    private TaskQueryFilter? BuildFilter()
-    {
-        return _selectedFilter switch
-        {
-            TaskFilterOption.Pending => new TaskQueryFilter(Status: UiTaskStatus.Pending),
-            TaskFilterOption.InProgress => new TaskQueryFilter(Status: UiTaskStatus.InProgress),
-            TaskFilterOption.Completed => new TaskQueryFilter(Status: UiTaskStatus.Completed),
-            TaskFilterOption.Archived => new TaskQueryFilter(Status: UiTaskStatus.Archived),
-            TaskFilterOption.HighPriority => new TaskQueryFilter(Priority: TaskPriority.High),
-            TaskFilterOption.CriticalPriority => new TaskQueryFilter(Priority: TaskPriority.Critical),
-            TaskFilterOption.Overdue => new TaskQueryFilter(Overdue: true),
-            _ => null
-        };
-    }
-
-    private static string GetTaskDescription(TaskItem task)
-    {
-        return string.IsNullOrWhiteSpace(task.Description)
-            ? "No description was provided for this task."
-            : task.Description;
-    }
-
-    private static string GetFilterLabel(TaskFilterOption option)
-    {
-        return option switch
-        {
-            TaskFilterOption.All => "All tasks",
-            TaskFilterOption.Pending => "Pending",
-            TaskFilterOption.InProgress => "In progress",
-            TaskFilterOption.Completed => "Completed",
-            TaskFilterOption.Archived => "Archived",
-            TaskFilterOption.HighPriority => "High priority",
-            TaskFilterOption.CriticalPriority => "Critical priority",
-            TaskFilterOption.Overdue => "Overdue",
-            _ => option.ToString()
-        };
-    }
-
-    private static string GetPriorityTone(TaskPriority priority)
-    {
-        return priority switch
-        {
-            TaskPriority.Low => "neutral",
-            TaskPriority.Medium => "warning",
-            TaskPriority.High => "accent",
-            TaskPriority.Critical => "danger",
-            _ => "neutral"
-        };
-    }
-
-    private static string GetStatusTone(UiTaskStatus status)
-    {
-        return status switch
-        {
-            UiTaskStatus.Pending => "neutral",
-            UiTaskStatus.InProgress => "accent",
-            UiTaskStatus.Completed => "success",
-            UiTaskStatus.Archived => "warning",
-            _ => "neutral"
-        };
-    }
-
     private static string BuildErrorMessage(Exception exception)
     {
         return exception switch
@@ -318,17 +224,5 @@
             HttpRequestException => "The web app could not reach the API. Start SmartTaskManager.Api and try again.",
             _ => "The task list could not be loaded."
         };
-    }
-
-    private enum TaskFilterOption
-    {
-        All,
-        Pending,
-        InProgress,
-        Completed,
-        Archived,
-        HighPriority,
-        CriticalPriority,
-        Overdue
     }
 }

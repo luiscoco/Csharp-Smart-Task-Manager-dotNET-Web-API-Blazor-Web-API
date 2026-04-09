@@ -10,7 +10,7 @@
     <PageHeader
         Eyebrow="Task details"
         Title="Task details"
-        Description="Single-task view backed by the existing task and history endpoints.">
+        Description="Detailed task information and the recorded history for the selected work item.">
         <Actions>
             <a class="button button--ghost" href="/tasks">Back to tasks</a>
         </Actions>
@@ -85,6 +85,10 @@
                 <article class="detail-card">
                     <span>Task type</span>
                     <strong>@_task.TaskType</strong>
+                </article>
+                <article class="detail-card">
+                    <span>Owner</span>
+                    <strong>@UserSession.CurrentUser!.UserName</strong>
                 </article>
                 <article class="detail-card">
                     <span>Due date</span>

@@ -1,4 +1,5 @@
 @page "/users"
+@implements IDisposable
 @inject UsersApiClient UsersApiClient
 @inject UserSession UserSession
 
@@ -58,8 +59,15 @@
 
                         <article class="user-card @(isActive ? "user-card--active" : string.Empty)">
                             <div>
-                                <h3>@user.UserName</h3>
+                                <div class="task-card__title-row">
+                                    <h3>@user.UserName</h3>
+                                    @if (isActive)
+                                    {
+                                        <StatusBadge Text="Active" Tone="accent" />
+                                    }
+                                </div>
                                 <p>Created @user.CreatedOnUtc.ToLocalTime().ToString("dd MMM yyyy")</p>
+                                <p>User ID @FormatUserIdentifier(user.Id)</p>
                             </div>
 
                             <div class="task-card__actions">
@@ -129,7 +137,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        UserSession.Changed += HandleSessionChanged;
         await LoadUsersAsync();
+    }
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
     }
 
     private async Task LoadUsersAsync()
@@ -139,7 +153,10 @@
 
         try
         {
-            _users = await UsersApiClient.ListUsersAsync();
+            _users = (await UsersApiClient.ListUsersAsync())
+                .OrderBy(user => user.UserName)
+                .ThenBy(user => user.CreatedOnUtc)
+                .ToList();
         }
         catch (Exception exception)
         {
@@ -211,6 +228,16 @@
     private bool IsActiveUser(UserSummary user)
     {
         return UserSession.CurrentUser?.Id == user.Id;
+    }
+
+    private void HandleSessionChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static string FormatUserIdentifier(Guid userId)
+    {
+        return userId.ToString("N")[..8].ToUpperInvariant();
     }
 
     private static string BuildErrorMessage(Exception exception)

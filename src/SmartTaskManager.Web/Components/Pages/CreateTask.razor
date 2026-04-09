@@ -1,4 +1,5 @@
 @page "/tasks/create"
+@implements IDisposable
 @inject NavigationManager NavigationManager
 @inject TasksApiClient TasksApiClient
 @inject UserSession UserSession
@@ -133,6 +134,16 @@
     private bool _isSubmitting;
     private string? _errorMessage;
 
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
     private async Task HandleSubmitAsync()
     {
         _errorMessage = null;
@@ -176,6 +187,11 @@
     {
         DateTime localDateTime = dueDate.ToDateTime(new TimeOnly(23, 59), DateTimeKind.Local);
         return localDateTime.ToUniversalTime();
+    }
+
+    private void HandleSessionChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private static string BuildErrorMessage(Exception exception)

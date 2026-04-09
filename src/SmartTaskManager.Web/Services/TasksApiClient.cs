@@ -1,5 +1,6 @@
 using SmartTaskManager.Web.Models;
 using SmartTaskManager.Web.Models.Requests;
+using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus;
 
 namespace SmartTaskManager.Web.Services;
 
@@ -31,6 +32,31 @@ public sealed class TasksApiClient : ApiClientBase
             BuildTasksUri(userId, filter),
             accessToken,
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<TaskItem>> ListTasksAsync(
+        Guid userId,
+        string accessToken,
+        UiTaskStatus? status,
+        TaskPriority? priority,
+        CancellationToken cancellationToken = default)
+    {
+        TaskQueryFilter? apiFilter = status.HasValue
+            ? new TaskQueryFilter(Status: status)
+            : priority.HasValue
+                ? new TaskQueryFilter(Priority: priority)
+                : null;
+
+        IReadOnlyCollection<TaskItem> tasks = await ListTasksAsync(
+            userId,
+            accessToken,
+            apiFilter,
+            cancellationToken);
+
+        return tasks
+            .Where(task => !status.HasValue || task.Status == status.Value)
+            .Where(task => !priority.HasValue || task.Priority == priority.Value)
+            .ToList();
     }
 
     public Task<TaskItem> GetTaskAsync(

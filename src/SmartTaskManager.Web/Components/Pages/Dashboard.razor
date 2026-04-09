@@ -1,5 +1,4 @@
 @page "/"
-@using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
 @implements IDisposable
 @inject TasksApiClient TasksApiClient
 @inject UserSession UserSession
@@ -10,7 +9,7 @@
     <PageHeader
         Eyebrow="Dashboard"
         Title="Portfolio dashboard"
-        Description="Server-rendered overview of the selected user's workload, powered by the existing API.">
+        Description="A quick operational summary for the currently selected user, backed by SmartTaskManager.Api.">
         <Actions>
             <a class="button button--secondary" href="/users">Switch user</a>
         </Actions>
@@ -20,7 +19,7 @@
     {
         <EmptyState
             Title="No workspace user selected"
-            Description="Pick a user first so the web app can request a development token and load task data.">
+            Description="Pick a user first so the dashboard can load API-backed task data.">
             <Actions>
                 <a class="button" href="/users">Open users</a>
             </Actions>
@@ -39,12 +38,10 @@
     else if (_summary is not null)
     {
         <section class="grid grid--metrics">
-            <MetricCard Label="Total Tasks" Value="@_summary.TotalTasks.ToString()" Note="All tracked tasks for the active user." />
-            <MetricCard Label="Pending" Value="@_summary.PendingTasks.ToString()" Note="Tasks waiting to be started." />
-            <MetricCard Label="In Progress" Value="@_summary.InProgressTasks.ToString()" Note="Work already underway." />
-            <MetricCard Label="Completed" Value="@_summary.CompletedTasks.ToString()" Note="Tasks already finished." />
-            <MetricCard Label="Archived" Value="@_summary.ArchivedTasks.ToString()" Note="Preserved for history only." />
-            <MetricCard Label="Overdue" Value="@_summary.OverdueTasks.ToString()" Note="Tasks that need attention now." />
+            <MetricCard Label="Total Tasks" Value="@_summary.TotalTasks.ToString()" Note="Everything assigned to the selected user." />
+            <MetricCard Label="Completed" Value="@_summary.CompletedTasks.ToString()" Note="Work already finished." />
+            <MetricCard Label="Pending" Value="@_summary.PendingTasks.ToString()" Note="Tasks waiting for attention." />
+            <MetricCard Label="Overdue" Value="@_summary.OverdueTasks.ToString()" Note="Tasks that have already passed their due date." />
         </section>
 
         <section class="panel">
@@ -72,34 +69,10 @@
                 <div class="task-list">
                     @foreach (TaskItem task in _recentTasks)
                     {
-                        <article class="task-card">
-                            <div class="task-card__header">
-                                <div>
-                                    <div class="task-card__title-row">
-                                        <h3>@task.Title</h3>
-                                        <StatusBadge Text="@task.Status.ToString()" Tone="@GetStatusTone(task.Status)" />
-                                        <StatusBadge Text="@task.Priority.ToString()" Tone="@GetPriorityTone(task.Priority)" />
-                                    </div>
-
-                                    <div class="task-card__meta">
-                                        <span>Due @task.DueDate.ToLocalTime().ToString("dd MMM yyyy")</span>
-                                        <span>@task.TaskType</span>
-                                        <span>@task.CategoryName</span>
-                                    </div>
-                                </div>
-
-                                @if (task.IsOverdue)
-                                {
-                                    <StatusBadge Text="Overdue" Tone="danger" />
-                                }
-                            </div>
-
-                            <p class="task-card__description">@GetTaskDescription(task)</p>
-
-                            <div class="task-card__actions">
-                                <a class="button button--ghost button--small" href="@($"/tasks/{task.Id}")">View details</a>
-                            </div>
-                        </article>
+                        <TaskCard
+                            Task="task"
+                            ShowOwner="false"
+                            ShowHistoryCount="false" />
                     }
                 </div>
             }
@@ -172,37 +145,6 @@
             _isLoading = false;
             await InvokeAsync(StateHasChanged);
         }
-    }
-
-    private static string GetTaskDescription(TaskItem task)
-    {
-        return string.IsNullOrWhiteSpace(task.Description)
-            ? "No description was provided for this task."
-            : task.Description;
-    }
-
-    private static string GetPriorityTone(TaskPriority priority)
-    {
-        return priority switch
-        {
-            TaskPriority.Low => "neutral",
-            TaskPriority.Medium => "warning",
-            TaskPriority.High => "accent",
-            TaskPriority.Critical => "danger",
-            _ => "neutral"
-        };
-    }
-
-    private static string GetStatusTone(UiTaskStatus status)
-    {
-        return status switch
-        {
-            UiTaskStatus.Pending => "neutral",
-            UiTaskStatus.InProgress => "accent",
-            UiTaskStatus.Completed => "success",
-            UiTaskStatus.Archived => "warning",
-            _ => "neutral"
-        };
     }
 
     private static string BuildErrorMessage(Exception exception)
