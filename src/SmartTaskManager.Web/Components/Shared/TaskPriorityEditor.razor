@@ -1,25 +1,26 @@
-<EditForm FormName="@FormName" OnSubmit="HandleSubmitAsync" class="priority-editor">
+<div class="priority-editor">
     <div class="field field--compact priority-editor__field">
         <label class="field__label" for="@InputId">@Label</label>
-        <InputSelect
+        <select
             id="@InputId"
             class="field__input"
-            @bind-Value="_selectedPriority"
+            @bind="_selectedPriority"
             disabled="@(!CanEdit || Disabled)">
             @foreach (TaskPriority priority in Enum.GetValues<TaskPriority>())
             {
                 <option value="@priority">@priority</option>
             }
-        </InputSelect>
+        </select>
     </div>
 
     <button
         class="button button--ghost button--small"
-        type="submit"
+        type="button"
+        @onclick="HandleSaveAsync"
         disabled="@(!CanSubmit)">
         @ButtonText
     </button>
-</EditForm>
+</div>
 
 @if (!string.IsNullOrWhiteSpace(HelpText))
 {
@@ -32,7 +33,6 @@
 }
 
 @code {
-    private readonly string FormName = $"priority-editor-{Guid.NewGuid():N}";
     private readonly string InputId = $"priority-editor-input-{Guid.NewGuid():N}";
     private TaskPriority _selectedPriority;
     private bool _isInitialized;
@@ -74,7 +74,7 @@
 
     private bool CanSubmit => CanEdit && !Disabled && _selectedPriority != CurrentPriority;
 
-    private Task HandleSubmitAsync()
+    private Task HandleSaveAsync()
     {
         return CanSubmit
             ? OnSave.InvokeAsync(_selectedPriority)
