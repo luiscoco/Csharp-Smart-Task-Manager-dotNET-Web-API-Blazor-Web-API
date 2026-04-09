@@ -99,13 +99,13 @@
                 </div>
             </div>
 
-            <EditForm Model="_form" OnValidSubmit="HandleCreateUserAsync" class="field-grid">
+            <EditForm EditContext="_editContext" FormName="create-user" OnValidSubmit="HandleCreateUserAsync" OnInvalidSubmit="HandleInvalidSubmit" class="field-grid">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="validation-summary" />
 
                 <div class="field">
                     <label class="field__label" for="userName">User name</label>
-                    <InputText id="userName" class="field__input" @bind-Value="_form.UserName" />
+                    <InputText id="userName" class="field__input" @bind-Value="_form.UserName" maxlength="100" />
                     <p class="field__help">Create a simple profile to request a development token and unlock task pages.</p>
                     <ValidationMessage For="@(() => _form.UserName)" />
                 </div>
@@ -136,6 +136,8 @@
 
 @code {
     private readonly CreateUserFormModel _form = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _validationMessageStore = default!;
     private bool _isLoading = true;
     private bool _isSubmitting;
     private Guid? _busyUserId;
@@ -146,12 +148,15 @@
     protected override async Task OnInitializedAsync()
     {
         UserSession.Changed += HandleSessionChanged;
+        ConfigureEditContext();
         await LoadUsersAsync();
     }
 
     public void Dispose()
     {
         UserSession.Changed -= HandleSessionChanged;
+        _editContext.OnFieldChanged -= HandleFieldChanged;
+        _editContext.OnValidationRequested -= HandleValidationRequested;
     }
 
     private async Task LoadUsersAsync()
@@ -178,6 +183,7 @@
 
     private async Task HandleCreateUserAsync()
     {
+        ClearServerValidationMessages();
         _isSubmitting = true;
         _errorMessage = null;
         _statusMessage = null;
@@ -196,6 +202,11 @@
 
             await ActivateUserAsync(createdUser, $"Created {createdUser.UserName} and started a workspace session.");
         }
+        catch (SmartTaskManagerApiException apiException)
+        {
+            ApplyApiValidationErrors(apiException);
+            _errorMessage = BuildErrorMessage(apiException);
+        }
         catch (Exception exception)
         {
             _errorMessage = BuildErrorMessage(exception);
@@ -204,6 +215,11 @@
         {
             _isSubmitting = false;
         }
+    }
+
+    private void HandleInvalidSubmit(EditContext editContext)
+    {
+        _errorMessage = "Correct the highlighted fields and try again.";
     }
 
     private async Task ActivateUserAsync(UserSummary user, string? successMessage = null)
@@ -243,6 +259,61 @@
         _ = InvokeAsync(StateHasChanged);
     }
 
+    private void ConfigureEditContext()
+    {
+        _editContext = new EditContext(_form);
+        _validationMessageStore = new ValidationMessageStore(_editContext);
+        _editContext.OnFieldChanged += HandleFieldChanged;
+        _editContext.OnValidationRequested += HandleValidationRequested;
+    }
+
+    private void HandleFieldChanged(object? sender, FieldChangedEventArgs eventArgs)
+    {
+        _validationMessageStore.Clear(eventArgs.FieldIdentifier);
+        _errorMessage = null;
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private void HandleValidationRequested(object? sender, ValidationRequestedEventArgs eventArgs)
+    {
+        ClearServerValidationMessages();
+    }
+
+    private void ClearServerValidationMessages()
+    {
+        _validationMessageStore.Clear();
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private void ApplyApiValidationErrors(SmartTaskManagerApiException apiException)
+    {
+        Dictionary<string, string[]>? errors = apiException.Error?.Errors;
+        if (errors is null || errors.Count == 0)
+        {
+            return;
+        }
+
+        foreach ((string fieldName, string[] messages) in errors)
+        {
+            FieldIdentifier fieldIdentifier = CreateFieldIdentifier(fieldName);
+            _validationMessageStore.Add(fieldIdentifier, messages);
+        }
+
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private FieldIdentifier CreateFieldIdentifier(string fieldName)
+    {
+        string normalizedFieldName = fieldName.Split('.').LastOrDefault() ?? string.Empty;
+
+        if (normalizedFieldName.Equals(nameof(CreateUserFormModel.UserName), StringComparison.OrdinalIgnoreCase))
+        {
+            return FieldIdentifier.Create(() => _form.UserName);
+        }
+
+        return new FieldIdentifier(_form, string.Empty);
+    }
+
     private static string FormatUserIdentifier(Guid userId)
     {
         return userId.ToString("N")[..8].ToUpperInvariant();
@@ -259,6 +330,8 @@
     {
         return exception switch
         {
+            SmartTaskManagerApiException apiException when apiException.Error?.Errors?.Count > 0
+                => "The API rejected the user profile. Review the highlighted field and try again.",
             SmartTaskManagerApiException apiException => apiException.Message,
             HttpRequestException => "The web app could not reach the API. Start SmartTaskManager.Api and try again.",
             _ => "The users page could not complete the request."
