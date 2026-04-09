@@ -44,26 +44,29 @@
                     </div>
                 </div>
 
-                <EditForm Model="_form" OnValidSubmit="HandleSubmitAsync" class="field-grid">
+                <EditForm EditContext="_editContext" FormName="create-task" OnValidSubmit="HandleSubmitAsync" OnInvalidSubmit="HandleInvalidSubmit" class="field-grid">
                     <DataAnnotationsValidator />
                     <ValidationSummary class="validation-summary" />
 
                     <div class="field">
                         <label class="field__label" for="title">Title</label>
-                        <InputText id="title" class="field__input" @bind-Value="_form.Title" />
+                        <InputText id="title" class="field__input" @bind-Value="_form.Title" maxlength="200" />
+                        <p class="field__help">Required. Keep it short and specific so the task list stays readable.</p>
                         <ValidationMessage For="@(() => _form.Title)" />
                     </div>
 
                     <div class="field">
                         <label class="field__label" for="description">Description</label>
-                        <InputTextArea id="description" class="field__textarea" @bind-Value="_form.Description" />
+                        <InputTextArea id="description" class="field__textarea" @bind-Value="_form.Description" maxlength="2000" />
+                        <p class="field__help">Optional. Add the context someone needs to complete the task.</p>
                         <ValidationMessage For="@(() => _form.Description)" />
                     </div>
 
                     <div class="grid grid--2">
                         <div class="field">
                             <label class="field__label" for="dueDate">Due date</label>
-                            <InputDate id="dueDate" class="field__input" @bind-Value="_form.DueDate" />
+                            <InputDate id="dueDate" class="field__input" @bind-Value="_form.DueDate" min="@MinimumDueDateText" />
+                            <p class="field__help">Required. Choose today or a future date.</p>
                             <ValidationMessage For="@(() => _form.DueDate)" />
                         </div>
 
@@ -91,7 +94,8 @@
 
                         <div class="field">
                             <label class="field__label" for="category">Category</label>
-                            <InputText id="category" class="field__input" @bind-Value="_form.CategoryName" />
+                            <InputText id="category" class="field__input" @bind-Value="_form.CategoryName" maxlength="100" />
+                            <p class="field__help">Optional. Leave it blank if the task does not need a category.</p>
                             <ValidationMessage For="@(() => _form.CategoryName)" />
                         </div>
                     </div>
@@ -131,21 +135,28 @@
 
 @code {
     private readonly CreateTaskFormModel _form = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _validationMessageStore = default!;
     private bool _isSubmitting;
     private string? _errorMessage;
+    private string MinimumDueDateText => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     protected override void OnInitialized()
     {
         UserSession.Changed += HandleSessionChanged;
+        ConfigureEditContext();
     }
 
     public void Dispose()
     {
         UserSession.Changed -= HandleSessionChanged;
+        _editContext.OnFieldChanged -= HandleFieldChanged;
+        _editContext.OnValidationRequested -= HandleValidationRequested;
     }
 
     private async Task HandleSubmitAsync()
     {
+        ClearServerValidationMessages();
         _errorMessage = null;
 
         if (UserSession.CurrentUser is null || UserSession.BearerToken is null || _form.DueDate is null)
@@ -171,7 +182,12 @@
                 request,
                 UserSession.BearerToken);
 
-            NavigationManager.NavigateTo($"/tasks/{createdTask.Id}");
+            NavigationManager.NavigateTo($"/tasks/{createdTask.Id}?created=true");
+        }
+        catch (SmartTaskManagerApiException apiException)
+        {
+            ApplyApiValidationErrors(apiException);
+            _errorMessage = BuildErrorMessage(apiException);
         }
         catch (Exception exception)
         {
@@ -183,14 +199,100 @@
         }
     }
 
+    private void HandleInvalidSubmit(EditContext editContext)
+    {
+        _errorMessage = "Correct the highlighted fields and try again.";
+    }
+
     private static DateTime BuildDueDateUtc(DateOnly dueDate)
     {
         DateTime localDateTime = dueDate.ToDateTime(new TimeOnly(23, 59), DateTimeKind.Local);
         return localDateTime.ToUniversalTime();
     }
 
+    private void ConfigureEditContext()
+    {
+        _editContext = new EditContext(_form);
+        _validationMessageStore = new ValidationMessageStore(_editContext);
+        _editContext.OnFieldChanged += HandleFieldChanged;
+        _editContext.OnValidationRequested += HandleValidationRequested;
+    }
+
+    private void HandleFieldChanged(object? sender, FieldChangedEventArgs eventArgs)
+    {
+        _validationMessageStore.Clear(eventArgs.FieldIdentifier);
+        _errorMessage = null;
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private void HandleValidationRequested(object? sender, ValidationRequestedEventArgs eventArgs)
+    {
+        ClearServerValidationMessages();
+    }
+
+    private void ClearServerValidationMessages()
+    {
+        _validationMessageStore.Clear();
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private void ApplyApiValidationErrors(SmartTaskManagerApiException apiException)
+    {
+        Dictionary<string, string[]>? errors = apiException.Error?.Errors;
+        if (errors is null || errors.Count == 0)
+        {
+            return;
+        }
+
+        foreach ((string fieldName, string[] messages) in errors)
+        {
+            FieldIdentifier fieldIdentifier = CreateFieldIdentifier(fieldName);
+            _validationMessageStore.Add(fieldIdentifier, messages);
+        }
+
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private FieldIdentifier CreateFieldIdentifier(string fieldName)
+    {
+        string normalizedFieldName = fieldName.Split('.').LastOrDefault() ?? string.Empty;
+
+        if (normalizedFieldName.Equals(nameof(CreateTaskFormModel.Title), StringComparison.OrdinalIgnoreCase))
+        {
+            return FieldIdentifier.Create(() => _form.Title);
+        }
+
+        if (normalizedFieldName.Equals(nameof(CreateTaskFormModel.Description), StringComparison.OrdinalIgnoreCase))
+        {
+            return FieldIdentifier.Create(() => _form.Description);
+        }
+
+        if (normalizedFieldName.Equals(nameof(CreateTaskFormModel.DueDate), StringComparison.OrdinalIgnoreCase))
+        {
+            return FieldIdentifier.Create(() => _form.DueDate);
+        }
+
+        if (normalizedFieldName.Equals(nameof(CreateTaskFormModel.Priority), StringComparison.OrdinalIgnoreCase))
+        {
+            return FieldIdentifier.Create(() => _form.Priority);
+        }
+
+        if (normalizedFieldName.Equals(nameof(CreateTaskFormModel.CategoryName), StringComparison.OrdinalIgnoreCase))
+        {
+            return FieldIdentifier.Create(() => _form.CategoryName);
+        }
+
+        if (normalizedFieldName.Equals(nameof(CreateTaskFormModel.TaskType), StringComparison.OrdinalIgnoreCase))
+        {
+            return FieldIdentifier.Create(() => _form.TaskType);
+        }
+
+        return new FieldIdentifier(_form, string.Empty);
+    }
+
     private void HandleSessionChanged()
     {
+        _errorMessage = null;
         _ = InvokeAsync(StateHasChanged);
     }
 
@@ -198,6 +300,8 @@
     {
         return exception switch
         {
+            SmartTaskManagerApiException apiException when apiException.Error?.Errors?.Count > 0
+                => "The API rejected the task. Review the highlighted fields and try again.",
             SmartTaskManagerApiException apiException => apiException.Message,
             HttpRequestException => "The web app could not reach the API. Start SmartTaskManager.Api and try again.",
             _ => "The task could not be created."

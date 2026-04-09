@@ -361,6 +361,18 @@ p {
     font-size: 0.9rem;
 }
 
+.priority-editor {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+    margin-top: 1rem;
+}
+
+.priority-editor__field {
+    margin: 0;
+}
+
 .form-actions,
 .toolbar,
 .empty-state__actions {
@@ -493,7 +505,8 @@ p {
     }
 
     .toolbar--filters,
-    .toolbar__group--actions {
+    .toolbar__group--actions,
+    .priority-editor {
         align-items: stretch;
         justify-content: flex-start;
     }

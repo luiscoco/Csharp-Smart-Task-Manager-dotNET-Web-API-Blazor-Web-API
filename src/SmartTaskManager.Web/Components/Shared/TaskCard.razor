@@ -34,6 +34,17 @@
         <p class="task-card__description">@GetTaskDescription(Task)</p>
     }
 
+    @if (ShowPriorityEditor)
+    {
+        <TaskPriorityEditor
+            CurrentPriority="Task.Priority"
+            Disabled="IsBusy"
+            CanEdit="@CanUpdatePriority"
+            ButtonText="Save priority"
+            ReadOnlyMessage="Completed and archived tasks cannot be reprioritized."
+            OnSave="UpdatePriorityAsync" />
+    }
+
     @if (ShowActions)
     {
         <div class="task-card__actions">
@@ -85,6 +96,9 @@
     public bool ShowActions { get; set; }
 
     [Parameter]
+    public bool ShowPriorityEditor { get; set; }
+
+    [Parameter]
     public bool ShowDetailsLink { get; set; } = true;
 
     [Parameter]
@@ -96,7 +110,11 @@
     [Parameter]
     public EventCallback<Guid> OnArchive { get; set; }
 
+    [Parameter]
+    public EventCallback<TaskPriorityChangeCommand> OnPriorityChanged { get; set; }
+
     private string DetailsUrl => $"/tasks/{Task.Id}";
+    private bool CanUpdatePriority => Task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived;
 
     private Task CompleteAsync()
     {
@@ -106,6 +124,11 @@
     private Task ArchiveAsync()
     {
         return OnArchive.InvokeAsync(Task.Id);
+    }
+
+    private Task UpdatePriorityAsync(TaskPriority priority)
+    {
+        return OnPriorityChanged.InvokeAsync(new TaskPriorityChangeCommand(Task.Id, priority));
     }
 
     private static string GetTaskDescription(TaskItem task)

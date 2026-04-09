@@ -81,7 +81,9 @@
                             ShowOwner="true"
                             ShowHistoryCount="true"
                             ShowActions="true"
+                            ShowPriorityEditor="true"
                             IsBusy="@(_busyTaskId == task.Id)"
+                            OnPriorityChanged="UpdateTaskPriorityAsync"
                             OnComplete="CompleteTaskAsync"
                             OnArchive="ArchiveTaskAsync" />
                     }
@@ -102,7 +104,7 @@
     protected override async Task OnInitializedAsync()
     {
         UserSession.Changed += HandleSessionChanged;
-        await LoadTasksAsync();
+        await LoadTasksAsyncCore(clearStatusMessage: true);
     }
 
     public void Dispose()
@@ -110,10 +112,19 @@
         UserSession.Changed -= HandleSessionChanged;
     }
 
-    private async Task LoadTasksAsync()
+    private Task LoadTasksAsync()
+    {
+        return LoadTasksAsyncCore(clearStatusMessage: true);
+    }
+
+    private async Task LoadTasksAsyncCore(bool clearStatusMessage)
     {
         _errorMessage = null;
-        _statusMessage = null;
+
+        if (clearStatusMessage)
+        {
+            _statusMessage = null;
+        }
 
         if (!UserSession.HasActiveUser || UserSession.CurrentUser is null || UserSession.BearerToken is null)
         {
@@ -145,6 +156,38 @@
         }
     }
 
+    private async Task UpdateTaskPriorityAsync(TaskPriorityChangeCommand command)
+    {
+        if (!TryGetSession(out Guid userId, out string? accessToken))
+        {
+            return;
+        }
+
+        _busyTaskId = command.TaskId;
+        _errorMessage = null;
+        _statusMessage = null;
+
+        try
+        {
+            TaskItem task = await TasksApiClient.UpdateTaskPriorityAsync(
+                userId,
+                command.TaskId,
+                new UpdateTaskPriorityRequest(command.Priority),
+                accessToken!);
+
+            _statusMessage = $"Updated '{task.Title}' to {task.Priority} priority.";
+            await LoadTasksAsyncCore(clearStatusMessage: false);
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _busyTaskId = null;
+        }
+    }
+
     private async Task CompleteTaskAsync(Guid taskId)
     {
         if (!TryGetSession(out Guid userId, out string? accessToken))
@@ -154,12 +197,13 @@
 
         _busyTaskId = taskId;
         _errorMessage = null;
+        _statusMessage = null;
 
         try
         {
             TaskItem task = await TasksApiClient.CompleteTaskAsync(userId, taskId, accessToken!);
             _statusMessage = $"Marked '{task.Title}' as completed.";
-            await LoadTasksAsync();
+            await LoadTasksAsyncCore(clearStatusMessage: false);
         }
         catch (Exception exception)
         {
@@ -180,12 +224,13 @@
 
         _busyTaskId = taskId;
         _errorMessage = null;
+        _statusMessage = null;
 
         try
         {
             TaskItem task = await TasksApiClient.ArchiveTaskAsync(userId, taskId, accessToken!);
             _statusMessage = $"Archived '{task.Title}'.";
-            await LoadTasksAsync();
+            await LoadTasksAsyncCore(clearStatusMessage: false);
         }
         catch (Exception exception)
         {

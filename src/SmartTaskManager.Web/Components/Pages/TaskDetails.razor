@@ -101,6 +101,14 @@
             </div>
 
             <p class="task-card__description">@GetTaskDescription(_task)</p>
+
+            <TaskPriorityEditor
+                CurrentPriority="_task.Priority"
+                Disabled="_isBusy"
+                CanEdit="@CanUpdatePriority(_task)"
+                HelpText="Save a new priority through the existing task API."
+                ReadOnlyMessage="Completed and archived tasks cannot be reprioritized."
+                OnSave="UpdateTaskPriorityAsync" />
         </section>
 
         <section class="panel">
@@ -138,6 +146,9 @@
     [Parameter]
     public Guid TaskId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "created")]
+    public bool Created { get; set; }
+
     private bool _isLoading = true;
     private bool _isBusy;
     private string? _errorMessage;
@@ -152,6 +163,10 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        _statusMessage = Created
+            ? "Task created successfully."
+            : null;
+
         await LoadAsync();
     }
 
@@ -213,11 +228,44 @@
 
         _isBusy = true;
         _errorMessage = null;
+        _statusMessage = null;
 
         try
         {
             TaskItem task = await TasksApiClient.CompleteTaskAsync(userId, TaskId, accessToken!);
             _statusMessage = $"Marked '{task.Title}' as completed.";
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task UpdateTaskPriorityAsync(TaskPriority priority)
+    {
+        if (!TryGetSession(out Guid userId, out string? accessToken))
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+        _statusMessage = null;
+
+        try
+        {
+            TaskItem task = await TasksApiClient.UpdateTaskPriorityAsync(
+                userId,
+                TaskId,
+                new UpdateTaskPriorityRequest(priority),
+                accessToken!);
+
+            _statusMessage = $"Updated '{task.Title}' to {task.Priority} priority.";
             await LoadAsync();
         }
         catch (Exception exception)
@@ -239,6 +287,7 @@
 
         _isBusy = true;
         _errorMessage = null;
+        _statusMessage = null;
 
         try
         {
@@ -275,6 +324,11 @@
         return string.IsNullOrWhiteSpace(task.Description)
             ? "No description was provided for this task."
             : task.Description;
+    }
+
+    private static bool CanUpdatePriority(TaskItem task)
+    {
+        return task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived;
     }
 
     private static string BuildErrorMessage(Exception exception)
