@@ -1,6 +1,6 @@
 @page "/tasks"
 @using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
-@inject SmartTaskManagerApiClient ApiClient
+@inject TasksApiClient TasksApiClient
 @inject UserSession UserSession
 
 <PageTitle>Tasks</PageTitle>
@@ -167,7 +167,7 @@
 
         try
         {
-            _tasks = await ApiClient.GetTasksAsync(
+            _tasks = await TasksApiClient.ListTasksAsync(
                 UserSession.CurrentUser.Id,
                 UserSession.BearerToken,
                 BuildFilter());
@@ -194,7 +194,7 @@
 
         try
         {
-            TaskItem task = await ApiClient.CompleteTaskAsync(userId, taskId, accessToken!);
+            TaskItem task = await TasksApiClient.CompleteTaskAsync(userId, taskId, accessToken!);
             _statusMessage = $"Marked '{task.Title}' as completed.";
             await LoadTasksAsync();
         }
@@ -220,7 +220,7 @@
 
         try
         {
-            TaskItem task = await ApiClient.ArchiveTaskAsync(userId, taskId, accessToken!);
+            TaskItem task = await TasksApiClient.ArchiveTaskAsync(userId, taskId, accessToken!);
             _statusMessage = $"Archived '{task.Title}'.";
             await LoadTasksAsync();
         }

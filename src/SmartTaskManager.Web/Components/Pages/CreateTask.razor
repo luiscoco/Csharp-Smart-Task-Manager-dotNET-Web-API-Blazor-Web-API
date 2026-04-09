@@ -1,6 +1,6 @@
 @page "/tasks/create"
 @inject NavigationManager NavigationManager
-@inject SmartTaskManagerApiClient ApiClient
+@inject TasksApiClient TasksApiClient
 @inject UserSession UserSession
 
 <PageTitle>Create Task</PageTitle>
@@ -155,7 +155,7 @@
                 string.IsNullOrWhiteSpace(_form.CategoryName) ? null : _form.CategoryName.Trim(),
                 _form.TaskType);
 
-            TaskItem createdTask = await ApiClient.CreateTaskAsync(
+            TaskItem createdTask = await TasksApiClient.CreateTaskAsync(
                 UserSession.CurrentUser.Id,
                 request,
                 UserSession.BearerToken);

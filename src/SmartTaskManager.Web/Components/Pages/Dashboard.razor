@@ -1,7 +1,7 @@
 @page "/"
 @using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
 @implements IDisposable
-@inject SmartTaskManagerApiClient ApiClient
+@inject TasksApiClient TasksApiClient
 @inject UserSession UserSession
 
 <PageTitle>Dashboard</PageTitle>
@@ -147,11 +147,11 @@
 
         try
         {
-            Task<TaskDashboardSummary> dashboardTask = ApiClient.GetDashboardAsync(
+            Task<TaskDashboardSummary> dashboardTask = TasksApiClient.GetDashboardSummaryAsync(
                 UserSession.CurrentUser.Id,
                 UserSession.BearerToken);
 
-            Task<IReadOnlyCollection<TaskItem>> tasksTask = ApiClient.GetTasksAsync(
+            Task<IReadOnlyCollection<TaskItem>> tasksTask = TasksApiClient.ListTasksAsync(
                 UserSession.CurrentUser.Id,
                 UserSession.BearerToken);
 

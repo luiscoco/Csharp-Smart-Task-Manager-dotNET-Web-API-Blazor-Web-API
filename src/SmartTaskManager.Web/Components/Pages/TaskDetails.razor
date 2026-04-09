@@ -1,7 +1,7 @@
 @page "/tasks/{TaskId:guid}"
 @using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
 @implements IDisposable
-@inject SmartTaskManagerApiClient ApiClient
+@inject TasksApiClient TasksApiClient
 @inject UserSession UserSession
 
 <PageTitle>Task Details</PageTitle>
@@ -179,8 +179,8 @@
 
         try
         {
-            Task<TaskItem> taskRequest = ApiClient.GetTaskAsync(userId, TaskId, accessToken!);
-            Task<IReadOnlyCollection<TaskHistoryEntry>> historyRequest = ApiClient.GetTaskHistoryAsync(userId, TaskId, accessToken!);
+            Task<TaskItem> taskRequest = TasksApiClient.GetTaskAsync(userId, TaskId, accessToken!);
+            Task<IReadOnlyCollection<TaskHistoryEntry>> historyRequest = TasksApiClient.GetTaskHistoryAsync(userId, TaskId, accessToken!);
 
             await Task.WhenAll(taskRequest, historyRequest);
 
@@ -212,7 +212,7 @@
 
         try
         {
-            TaskItem task = await ApiClient.CompleteTaskAsync(userId, TaskId, accessToken!);
+            TaskItem task = await TasksApiClient.CompleteTaskAsync(userId, TaskId, accessToken!);
             _statusMessage = $"Marked '{task.Title}' as completed.";
             await LoadAsync();
         }
@@ -238,7 +238,7 @@
 
         try
         {
-            TaskItem task = await ApiClient.ArchiveTaskAsync(userId, TaskId, accessToken!);
+            TaskItem task = await TasksApiClient.ArchiveTaskAsync(userId, TaskId, accessToken!);
             _statusMessage = $"Archived '{task.Title}'.";
             await LoadAsync();
         }

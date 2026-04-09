@@ -16,16 +16,8 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddHttpClient<SmartTaskManagerApiClient>((serviceProvider, httpClient) =>
-{
-    SmartTaskManagerApiOptions options = serviceProvider
-        .GetRequiredService<IOptions<SmartTaskManagerApiOptions>>()
-        .Value;
-
-    httpClient.BaseAddress = new Uri(EnsureTrailingSlash(options.BaseUrl), UriKind.Absolute);
-    httpClient.DefaultRequestHeaders.Accept.Add(
-        new MediaTypeWithQualityHeaderValue("application/json"));
-});
+builder.Services.AddHttpClient<UsersApiClient>(ConfigureApiHttpClient);
+builder.Services.AddHttpClient<TasksApiClient>(ConfigureApiHttpClient);
 
 builder.Services.AddScoped<UserSession>();
 
@@ -52,4 +44,15 @@ static string EnsureTrailingSlash(string baseUrl)
     return baseUrl.EndsWith("/", StringComparison.Ordinal)
         ? baseUrl
         : $"{baseUrl}/";
+}
+
+static void ConfigureApiHttpClient(IServiceProvider serviceProvider, HttpClient httpClient)
+{
+    SmartTaskManagerApiOptions options = serviceProvider
+        .GetRequiredService<IOptions<SmartTaskManagerApiOptions>>()
+        .Value;
+
+    httpClient.BaseAddress = new Uri(EnsureTrailingSlash(options.BaseUrl), UriKind.Absolute);
+    httpClient.DefaultRequestHeaders.Accept.Add(
+        new MediaTypeWithQualityHeaderValue("application/json"));
 }

@@ -1,5 +1,5 @@
 @page "/users"
-@inject SmartTaskManagerApiClient ApiClient
+@inject UsersApiClient UsersApiClient
 @inject UserSession UserSession
 
 <PageTitle>Users</PageTitle>
@@ -139,7 +139,7 @@
 
         try
         {
-            _users = await ApiClient.GetUsersAsync();
+            _users = await UsersApiClient.ListUsersAsync();
         }
         catch (Exception exception)
         {
@@ -159,7 +159,7 @@
 
         try
         {
-            UserSummary createdUser = await ApiClient.CreateUserAsync(
+            UserSummary createdUser = await UsersApiClient.CreateUserAsync(
                 new CreateUserRequest(_form.UserName.Trim()));
 
             _users = _users
@@ -188,7 +188,7 @@
 
         try
         {
-            AccessTokenResult token = await ApiClient.CreateTokenAsync(user.UserName);
+            AccessTokenResult token = await UsersApiClient.CreateTokenAsync(user.UserName);
             UserSession.Start(user, token);
             _statusMessage = successMessage ?? $"{user.UserName} is now the active workspace user.";
         }
