@@ -30,7 +30,9 @@
 }
 
 .nav-menu__links ::deep .nav-menu__link {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
     padding: 0.8rem 0.95rem;
     border-radius: 0.95rem;
     color: var(--color-ink);
@@ -49,6 +51,20 @@
     color: #fff;
     background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
     box-shadow: 0 14px 28px rgba(15, 118, 110, 0.22);
+}
+
+.nav-menu__link-title {
+    font-size: 1rem;
+}
+
+.nav-menu__link-meta {
+    color: var(--color-muted);
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+.nav-menu__links ::deep a.nav-menu__link.active .nav-menu__link-meta {
+    color: rgba(255, 255, 255, 0.84);
 }
 
 .nav-menu__session {

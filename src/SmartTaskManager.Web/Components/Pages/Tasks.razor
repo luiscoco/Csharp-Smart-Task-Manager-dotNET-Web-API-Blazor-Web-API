@@ -29,16 +29,18 @@
     {
         @if (_errorMessage is not null)
         {
-            <div class="callout callout--danger">
-                <p>@_errorMessage</p>
-            </div>
+            <FeedbackCallout
+                Tone="danger"
+                Title="Tasks unavailable"
+                Message="@_errorMessage" />
         }
 
         @if (_statusMessage is not null)
         {
-            <div class="callout callout--success">
-                <p>@_statusMessage</p>
-            </div>
+            <FeedbackCallout
+                Tone="success"
+                Title="Task updated"
+                Message="@_statusMessage" />
         }
 
         <section class="panel">
@@ -46,7 +48,15 @@
                 <div>
                     <p class="panel__eyebrow">Task list</p>
                     <h2 class="panel__title">@UserSession.CurrentUser!.UserName's tasks</h2>
+                    <p class="panel__meta">@BuildTaskSummary()</p>
                 </div>
+
+                @if (_filter.HasActiveFilters)
+                {
+                    <div class="panel__badges">
+                        <StatusBadge Text="@BuildFilterSummary()" Tone="accent" />
+                    </div>
+                }
             </div>
 
             <TaskFilterBar
@@ -58,11 +68,14 @@
 
             @if (_isLoading)
             {
-                <div class="loading-panel">Loading tasks from the API...</div>
+                <LoadingState
+                    Title="Loading tasks"
+                    Description="Fetching the latest task list and applying the current filters." />
             }
             else if (_tasks.Count == 0)
             {
                 <EmptyState
+                    Eyebrow="@(_filter.HasActiveFilters ? "Filtered results" : "No tasks")"
                     Title="No tasks matched the current filter"
                     Description="Create a task or clear the active filters to see more work items.">
                     <Actions>
@@ -259,6 +272,43 @@
         userId = Guid.Empty;
         accessToken = null;
         return false;
+    }
+
+    private string BuildTaskSummary()
+    {
+        if (_isLoading)
+        {
+            return "Loading the task workspace.";
+        }
+
+        int overdueCount = _tasks.Count(task => task.IsOverdue);
+        return $"{_tasks.Count} visible task{(_tasks.Count == 1 ? string.Empty : "s")} with {overdueCount} overdue.";
+    }
+
+    private string BuildFilterSummary()
+    {
+        List<string> parts = new();
+
+        if (_filter.Status.HasValue)
+        {
+            parts.Add(FormatStatus(_filter.Status.Value));
+        }
+
+        if (_filter.Priority.HasValue)
+        {
+            parts.Add($"{_filter.Priority.Value} priority");
+        }
+
+        return string.Join(" • ", parts);
+    }
+
+    private static string FormatStatus(SmartTaskManager.Web.Models.TaskStatus status)
+    {
+        return status switch
+        {
+            SmartTaskManager.Web.Models.TaskStatus.InProgress => "In Progress",
+            _ => status.ToString()
+        };
     }
 
     private static string BuildErrorMessage(Exception exception)

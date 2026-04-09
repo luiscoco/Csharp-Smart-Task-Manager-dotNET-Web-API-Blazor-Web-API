@@ -1,4 +1,4 @@
-<article class="metric-card">
+<article class="@CssClass">
     <span class="metric-card__label">@Label</span>
     <strong class="metric-card__value">@Value</strong>
 
@@ -17,4 +17,9 @@
 
     [Parameter]
     public string? Note { get; set; }
+
+    [Parameter]
+    public string Tone { get; set; } = "neutral";
+
+    private string CssClass => $"metric-card metric-card--{Tone}";
 }

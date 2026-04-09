@@ -19,16 +19,18 @@
 
     @if (_errorMessage is not null)
     {
-        <div class="callout callout--danger">
-            <p>@_errorMessage</p>
-        </div>
+        <FeedbackCallout
+            Tone="danger"
+            Title="Users unavailable"
+            Message="@_errorMessage" />
     }
 
     @if (_statusMessage is not null)
     {
-        <div class="callout callout--success">
-            <p>@_statusMessage</p>
-        </div>
+        <FeedbackCallout
+            Tone="success"
+            Title="Workspace updated"
+            Message="@_statusMessage" />
     }
 
     <div class="grid grid--2">
@@ -37,16 +39,20 @@
                 <div>
                     <p class="panel__eyebrow">Existing profiles</p>
                     <h2 class="panel__title">Choose the active user</h2>
+                    <p class="panel__meta">@BuildUserSummary()</p>
                 </div>
             </div>
 
             @if (_isLoading)
             {
-                <div class="loading-panel">Loading users from the API...</div>
+                <LoadingState
+                    Title="Loading users"
+                    Description="Fetching local profiles from SmartTaskManager.Api." />
             }
             else if (_users.Count == 0)
             {
                 <EmptyState
+                    Eyebrow="No profiles"
                     Title="No users were returned"
                     Description="Create a user to start testing the API-driven task flows." />
             }
@@ -100,6 +106,7 @@
                 <div class="field">
                     <label class="field__label" for="userName">User name</label>
                     <InputText id="userName" class="field__input" @bind-Value="_form.UserName" />
+                    <p class="field__help">Create a simple profile to request a development token and unlock task pages.</p>
                     <ValidationMessage For="@(() => _form.UserName)" />
                 </div>
 
@@ -113,6 +120,7 @@
             @if (UserSession.HasActiveUser && UserSession.CurrentUser is not null)
             {
                 <div class="session-card">
+                    <StatusBadge Text="Session active" Tone="success" />
                     <h3>Current session</h3>
                     <p>@UserSession.CurrentUser.UserName is active in this Blazor circuit.</p>
                     <div class="task-card__actions">
@@ -238,6 +246,13 @@
     private static string FormatUserIdentifier(Guid userId)
     {
         return userId.ToString("N")[..8].ToUpperInvariant();
+    }
+
+    private string BuildUserSummary()
+    {
+        return _isLoading
+            ? "Loading available profiles."
+            : $"{_users.Count} profile{(_users.Count == 1 ? string.Empty : "s")} available for the current workspace.";
     }
 
     private static string BuildErrorMessage(Exception exception)

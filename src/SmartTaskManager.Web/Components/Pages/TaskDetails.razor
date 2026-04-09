@@ -28,21 +28,25 @@
     }
     else if (_isLoading)
     {
-        <div class="loading-panel">Loading task details...</div>
+        <LoadingState
+            Title="Loading task details"
+            Description="Retrieving the task and its history from SmartTaskManager.Api." />
     }
     else if (_errorMessage is not null)
     {
-        <div class="callout callout--danger">
-            <p>@_errorMessage</p>
-        </div>
+        <FeedbackCallout
+            Tone="danger"
+            Title="Task unavailable"
+            Message="@_errorMessage" />
     }
     else if (_task is not null)
     {
         @if (_statusMessage is not null)
         {
-            <div class="callout callout--success">
-                <p>@_statusMessage</p>
-            </div>
+            <FeedbackCallout
+                Tone="success"
+                Title="Task updated"
+                Message="@_statusMessage" />
         }
 
         <section class="panel">
@@ -50,6 +54,14 @@
                 <div>
                     <p class="panel__eyebrow">Overview</p>
                     <h2 class="panel__title">@_task.Title</h2>
+                    <div class="panel__badges">
+                        <StatusBadge Text="@FormatStatus(_task.Status)" Tone="@GetStatusTone(_task.Status)" />
+                        <StatusBadge Text="@_task.Priority.ToString()" Tone="@GetPriorityTone(_task.Priority)" />
+                        @if (_task.IsOverdue)
+                        {
+                            <StatusBadge Text="Overdue" Tone="danger" />
+                        }
+                    </div>
                 </div>
 
                 <div class="task-card__actions">
@@ -72,15 +84,15 @@
             <div class="detail-grid">
                 <article class="detail-card">
                     <span>Status</span>
-                    <strong>@_task.Status</strong>
+                    <StatusBadge Text="@FormatStatus(_task.Status)" Tone="@GetStatusTone(_task.Status)" />
                 </article>
                 <article class="detail-card">
                     <span>Priority</span>
-                    <strong>@_task.Priority</strong>
+                    <StatusBadge Text="@_task.Priority.ToString()" Tone="@GetPriorityTone(_task.Priority)" />
                 </article>
                 <article class="detail-card">
                     <span>Category</span>
-                    <strong>@_task.CategoryName</strong>
+                    <strong>@GetCategoryName(_task)</strong>
                 </article>
                 <article class="detail-card">
                     <span>Task type</span>
@@ -122,6 +134,7 @@
             @if (_history.Count == 0)
             {
                 <EmptyState
+                    Eyebrow="No activity"
                     Title="No history entries"
                     Description="This task has not recorded any state changes yet." />
             }
@@ -326,9 +339,49 @@
             : task.Description;
     }
 
+    private static string GetCategoryName(TaskItem task)
+    {
+        return string.IsNullOrWhiteSpace(task.CategoryName)
+            ? "General"
+            : task.CategoryName;
+    }
+
     private static bool CanUpdatePriority(TaskItem task)
     {
         return task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived;
+    }
+
+    private static string GetPriorityTone(TaskPriority priority)
+    {
+        return priority switch
+        {
+            TaskPriority.Low => "neutral",
+            TaskPriority.Medium => "warning",
+            TaskPriority.High => "accent",
+            TaskPriority.Critical => "danger",
+            _ => "neutral"
+        };
+    }
+
+    private static string GetStatusTone(UiTaskStatus status)
+    {
+        return status switch
+        {
+            UiTaskStatus.Pending => "neutral",
+            UiTaskStatus.InProgress => "accent",
+            UiTaskStatus.Completed => "success",
+            UiTaskStatus.Archived => "warning",
+            _ => "neutral"
+        };
+    }
+
+    private static string FormatStatus(UiTaskStatus status)
+    {
+        return status switch
+        {
+            UiTaskStatus.InProgress => "In Progress",
+            _ => status.ToString()
+        };
     }
 
     private static string BuildErrorMessage(Exception exception)

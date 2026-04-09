@@ -6,10 +6,22 @@
         <span class="nav-menu__caption">Pages</span>
 
         <div class="nav-menu__links">
-            <NavLink class="nav-menu__link" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
-            <NavLink class="nav-menu__link" href="/users">Users</NavLink>
-            <NavLink class="nav-menu__link" href="/tasks">Tasks</NavLink>
-            <NavLink class="nav-menu__link" href="/tasks/create">Create Task</NavLink>
+            <NavLink class="nav-menu__link" href="/" Match="NavLinkMatch.All">
+                <span class="nav-menu__link-title">Dashboard</span>
+                <span class="nav-menu__link-meta">Summary and recent work</span>
+            </NavLink>
+            <NavLink class="nav-menu__link" href="/users">
+                <span class="nav-menu__link-title">Users</span>
+                <span class="nav-menu__link-meta">Choose the active workspace session</span>
+            </NavLink>
+            <NavLink class="nav-menu__link" href="/tasks">
+                <span class="nav-menu__link-title">Tasks</span>
+                <span class="nav-menu__link-meta">Browse, filter, and update work items</span>
+            </NavLink>
+            <NavLink class="nav-menu__link" href="/tasks/create">
+                <span class="nav-menu__link-title">Create Task</span>
+                <span class="nav-menu__link-meta">Capture a new item with validation</span>
+            </NavLink>
         </div>
     </section>
 
@@ -19,6 +31,7 @@
         @if (UserSession.HasActiveUser)
         {
             <div class="nav-menu__session">
+                <StatusBadge Text="Active session" Tone="success" />
                 <strong>@UserSession.CurrentUser!.UserName</strong>
                 <span>Created @UserSession.CurrentUser.CreatedOnUtc.ToLocalTime().ToString("d")</span>
                 <button class="button button--ghost button--small" type="button" @onclick="ClearSession">
@@ -29,6 +42,7 @@
         else
         {
             <div class="nav-menu__session nav-menu__session--empty">
+                <StatusBadge Text="Session required" Tone="warning" />
                 <strong>No user selected</strong>
                 <span>Choose a user to request a development token and unlock task pages.</span>
             </div>

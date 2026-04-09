@@ -1,8 +1,15 @@
 @using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
 
-<article class="task-card">
+<article class="@CssClass">
+    <div class="task-card__topline">
+        <span class="task-card__eyebrow">@Task.TaskType task</span>
+        <span class="task-card__due-note @(Task.IsOverdue ? "task-card__due-note--overdue" : string.Empty)">
+            @GetDueNote(Task)
+        </span>
+    </div>
+
     <div class="task-card__header">
-        <div>
+        <div class="task-card__main">
             <div class="task-card__title-row">
                 <h3>@Task.Title</h3>
                 <StatusBadge Text="@FormatStatus(Task.Status)" Tone="@GetStatusTone(Task.Status)" />
@@ -13,65 +20,87 @@
                 }
             </div>
 
-            <div class="task-card__meta">
-                <span>Due @Task.DueDate.ToLocalTime().ToString("dd MMM yyyy")</span>
-                <span>@Task.TaskType</span>
-                <span>@Task.CategoryName</span>
-                @if (ShowOwner && !string.IsNullOrWhiteSpace(OwnerName))
-                {
-                    <span>Owner @OwnerName</span>
-                }
-                @if (ShowHistoryCount)
-                {
-                    <span>@Task.HistoryCount history entries</span>
-                }
-            </div>
+            @if (ShowDescription)
+            {
+                <p class="task-card__description">@GetTaskDescription(Task)</p>
+            }
+        </div>
+
+        <div class="task-card__summary">
+            <span class="task-card__summary-label">Due date</span>
+            <strong>@Task.DueDate.ToLocalTime().ToString("dd MMM yyyy")</strong>
+            <span>@GetDueSummary(Task)</span>
         </div>
     </div>
 
-    @if (ShowDescription)
-    {
-        <p class="task-card__description">@GetTaskDescription(Task)</p>
-    }
-
-    @if (ShowPriorityEditor)
-    {
-        <TaskPriorityEditor
-            CurrentPriority="Task.Priority"
-            Disabled="IsBusy"
-            CanEdit="@CanUpdatePriority"
-            ButtonText="Save priority"
-            ReadOnlyMessage="Completed and archived tasks cannot be reprioritized."
-            OnSave="UpdatePriorityAsync" />
-    }
-
-    @if (ShowActions)
-    {
-        <div class="task-card__actions">
-            @if (ShowDetailsLink)
-            {
-                <a class="button button--ghost button--small" href="@DetailsUrl">Details</a>
-            }
-
-            @if (Task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived)
-            {
-                <button class="button button--ghost button--small" type="button" @onclick="CompleteAsync" disabled="@IsBusy">
-                    Complete
-                </button>
-            }
-
-            @if (Task.Status != UiTaskStatus.Archived)
-            {
-                <button class="button button--ghost button--small" type="button" @onclick="ArchiveAsync" disabled="@IsBusy">
-                    Archive
-                </button>
-            }
+    <dl class="task-card__meta-grid">
+        <div class="task-card__meta-item">
+            <dt>Category</dt>
+            <dd>@GetCategoryName(Task)</dd>
         </div>
-    }
-    else if (ShowDetailsLink)
+        <div class="task-card__meta-item">
+            <dt>Type</dt>
+            <dd>@Task.TaskType</dd>
+        </div>
+        @if (ShowOwner && !string.IsNullOrWhiteSpace(OwnerName))
+        {
+            <div class="task-card__meta-item">
+                <dt>Owner</dt>
+                <dd>@OwnerName</dd>
+            </div>
+        }
+        @if (ShowHistoryCount)
+        {
+            <div class="task-card__meta-item">
+                <dt>History</dt>
+                <dd>@Task.HistoryCount entries</dd>
+            </div>
+        }
+    </dl>
+
+    @if (ShowPriorityEditor || ShowActions || ShowDetailsLink)
     {
-        <div class="task-card__actions">
-            <a class="button button--ghost button--small" href="@DetailsUrl">View details</a>
+        <div class="task-card__footer">
+            @if (ShowPriorityEditor)
+            {
+                <TaskPriorityEditor
+                    CurrentPriority="Task.Priority"
+                    Disabled="IsBusy"
+                    CanEdit="@CanUpdatePriority"
+                    ButtonText="Save priority"
+                    ReadOnlyMessage="Completed and archived tasks cannot be reprioritized."
+                    OnSave="UpdatePriorityAsync" />
+            }
+
+            @if (ShowActions)
+            {
+                <div class="task-card__actions">
+                    @if (ShowDetailsLink)
+                    {
+                        <a class="button button--ghost button--small" href="@DetailsUrl">Details</a>
+                    }
+
+                    @if (Task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived)
+                    {
+                        <button class="button button--ghost button--small" type="button" @onclick="CompleteAsync" disabled="@IsBusy">
+                            Complete
+                        </button>
+                    }
+
+                    @if (Task.Status != UiTaskStatus.Archived)
+                    {
+                        <button class="button button--ghost button--small" type="button" @onclick="ArchiveAsync" disabled="@IsBusy">
+                            Archive
+                        </button>
+                    }
+                </div>
+            }
+            else if (ShowDetailsLink)
+            {
+                <div class="task-card__actions">
+                    <a class="button button--ghost button--small" href="@DetailsUrl">View details</a>
+                </div>
+            }
         </div>
     }
 </article>
@@ -115,6 +144,7 @@
 
     private string DetailsUrl => $"/tasks/{Task.Id}";
     private bool CanUpdatePriority => Task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived;
+    private string CssClass => Task.IsOverdue ? "task-card task-card--overdue" : "task-card";
 
     private Task CompleteAsync()
     {
@@ -136,6 +166,38 @@
         return string.IsNullOrWhiteSpace(task.Description)
             ? "No description was provided for this task."
             : task.Description;
+    }
+
+    private static string GetCategoryName(TaskItem task)
+    {
+        return string.IsNullOrWhiteSpace(task.CategoryName)
+            ? "General"
+            : task.CategoryName;
+    }
+
+    private static string GetDueSummary(TaskItem task)
+    {
+        return task.Status switch
+        {
+            UiTaskStatus.Completed => "Completed work item",
+            UiTaskStatus.Archived => "Archived for reference",
+            _ => GetDueNote(task)
+        };
+    }
+
+    private static string GetDueNote(TaskItem task)
+    {
+        DateOnly dueDate = DateOnly.FromDateTime(task.DueDate.ToLocalTime());
+        DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+        int offset = dueDate.DayNumber - today.DayNumber;
+
+        return offset switch
+        {
+            < 0 => $"{Math.Abs(offset)} day{(Math.Abs(offset) == 1 ? string.Empty : "s")} overdue",
+            0 => "Due today",
+            1 => "Due tomorrow",
+            _ => $"Due in {offset} days"
+        };
     }
 
     private static string GetPriorityTone(TaskPriority priority)

@@ -18,6 +18,7 @@
     @if (!UserSession.HasActiveUser)
     {
         <EmptyState
+            Eyebrow="Dashboard locked"
             Title="No workspace user selected"
             Description="Pick a user first so the dashboard can load API-backed task data.">
             <Actions>
@@ -27,21 +28,24 @@
     }
     else if (_isLoading)
     {
-        <div class="loading-panel">Loading the dashboard for @UserSession.CurrentUser!.UserName...</div>
+        <LoadingState
+            Title="Loading dashboard"
+            Description="@($"Pulling the latest summary and recent tasks for {UserSession.CurrentUser!.UserName}.")" />
     }
     else if (_errorMessage is not null)
     {
-        <div class="callout callout--danger">
-            <p>@_errorMessage</p>
-        </div>
+        <FeedbackCallout
+            Tone="danger"
+            Title="Dashboard unavailable"
+            Message="@_errorMessage" />
     }
     else if (_summary is not null)
     {
         <section class="grid grid--metrics">
-            <MetricCard Label="Total Tasks" Value="@_summary.TotalTasks.ToString()" Note="Everything assigned to the selected user." />
-            <MetricCard Label="Completed" Value="@_summary.CompletedTasks.ToString()" Note="Work already finished." />
-            <MetricCard Label="Pending" Value="@_summary.PendingTasks.ToString()" Note="Tasks waiting for attention." />
-            <MetricCard Label="Overdue" Value="@_summary.OverdueTasks.ToString()" Note="Tasks that have already passed their due date." />
+            <MetricCard Label="Total Tasks" Value="@_summary.TotalTasks.ToString()" Note="Everything assigned to the selected user." Tone="accent" />
+            <MetricCard Label="Completed" Value="@_summary.CompletedTasks.ToString()" Note="Work already finished." Tone="success" />
+            <MetricCard Label="Pending" Value="@_summary.PendingTasks.ToString()" Note="Tasks waiting for attention." Tone="warning" />
+            <MetricCard Label="Overdue" Value="@_summary.OverdueTasks.ToString()" Note="Tasks that have already passed their due date." Tone="danger" />
         </section>
 
         <section class="panel">
@@ -49,6 +53,7 @@
                 <div>
                     <p class="panel__eyebrow">Recent tasks</p>
                     <h2 class="panel__title">Next work items for @UserSession.CurrentUser!.UserName</h2>
+                    <p class="panel__meta">The dashboard surfaces the earliest due tasks first so the most urgent work stays visible.</p>
                 </div>
 
                 <a class="button button--ghost button--small" href="/tasks">Open task list</a>
@@ -57,6 +62,7 @@
             @if (_recentTasks.Count == 0)
             {
                 <EmptyState
+                    Eyebrow="No recent work"
                     Title="No tasks yet"
                     Description="Create the first task to see it appear on the dashboard.">
                     <Actions>

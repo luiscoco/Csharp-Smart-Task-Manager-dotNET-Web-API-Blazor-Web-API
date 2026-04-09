@@ -18,22 +18,35 @@
             <div class="shell__intro">
                 <p class="shell__eyebrow">Connected Workspace</p>
                 <h2>Manage users and tasks through the existing SmartTaskManager Web API.</h2>
+
+                <div class="shell__actions">
+                    <a class="button button--ghost button--small" href="/tasks">Task workspace</a>
+                    <a class="button button--small" href="@GetPrimaryActionHref()">@GetPrimaryActionLabel()</a>
+                </div>
             </div>
 
-            <section class="session-panel @(UserSession.HasActiveUser ? "session-panel--active" : string.Empty)">
-                <span class="session-panel__label">Workspace user</span>
+            <div class="shell__status-grid">
+                <section class="session-panel @(UserSession.HasActiveUser ? "session-panel--active" : string.Empty)">
+                    <span class="session-panel__label">Workspace user</span>
 
-                @if (UserSession.HasActiveUser)
-                {
-                    <strong>@UserSession.CurrentUser!.UserName</strong>
-                    <span>Development token valid until @FormatTokenExpiry()</span>
-                }
-                else
-                {
-                    <strong>No active user</strong>
-                    <span>Open the Users page to start a session.</span>
-                }
-            </section>
+                    @if (UserSession.HasActiveUser)
+                    {
+                        <strong>@UserSession.CurrentUser!.UserName</strong>
+                        <span>Development token valid until @FormatTokenExpiry()</span>
+                    }
+                    else
+                    {
+                        <strong>No active user</strong>
+                        <span>Open the Users page to start a session.</span>
+                    }
+                </section>
+
+                <section class="session-panel session-panel--secondary">
+                    <span class="session-panel__label">Front-end architecture</span>
+                    <strong>Server-side Blazor with typed API clients</strong>
+                    <span>Clean UI components, reusable forms, and HTTP boundaries kept inside services.</span>
+                </section>
+            </div>
         </header>
 
         <article class="shell__content">
@@ -67,5 +80,15 @@
     private string FormatTokenExpiry()
     {
         return UserSession.TokenExpiresAtUtc?.ToLocalTime().ToString("g") ?? "unknown";
+    }
+
+    private string GetPrimaryActionHref()
+    {
+        return UserSession.HasActiveUser ? "/tasks/create" : "/users";
+    }
+
+    private string GetPrimaryActionLabel()
+    {
+        return UserSession.HasActiveUser ? "Create task" : "Start session";
     }
 }
