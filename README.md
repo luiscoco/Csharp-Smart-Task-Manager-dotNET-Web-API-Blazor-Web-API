@@ -1,151 +1,232 @@
 # SmartTaskManager
 
-SmartTaskManager is a `.NET 10` C# console application for managing users and tasks through a layered, Clean Architecture-based design.
+SmartTaskManager is a portfolio-ready `.NET 10` task management solution built with Clean Architecture, an ASP.NET Core Web API, and a modern Blazor Web App front end.
 
-The project demonstrates how to build a structured task management system with clear separation of concerns, object-oriented design, and a beginner-friendly console interface. It is useful as both a learning project and a portfolio project because it combines practical business features with maintainable architecture.
+The solution demonstrates how to separate domain logic, application workflows, infrastructure concerns, HTTP endpoints, and UI composition while keeping the code approachable for a beginner-to-intermediate .NET course.
 
-## Features
+## Solution Overview
 
-- Create and manage users
-- Create personal, work, and learning tasks
-- Track task priority and status
-- Mark tasks as completed
-- Archive tasks without deleting history
-- View task history for lifecycle changes
-- Filter tasks by status
-- Filter tasks by priority
-- View overdue tasks
-- Use a console-based dashboard summary
-- Work with seeded demo data for fast exploration
-- Store data in memory for a simple local setup
+SmartTaskManager is organized around two main executable projects:
 
-## Architecture Overview
+- `SmartTaskManager.Api`: the backend HTTP API that exposes users, tasks, dashboard, history, and task-action endpoints
+- `SmartTaskManager.Web`: the Blazor Web App front end that consumes the API through typed `HttpClient` services
 
-The solution follows a simple Clean Architecture approach with four main layers:
+Supporting those projects are the core Clean Architecture layers:
 
-### Domain
+- `SmartTaskManager.Domain`
+- `SmartTaskManager.Application`
+- `SmartTaskManager.Infrastructure`
 
-The Domain layer contains the core business model and rules.
-
-- Entities such as `User`, `BaseTask`, `PersonalTask`, `WorkTask`, and `LearningTask`
-- Enums for task priority and task status
-- History tracking records
-- Repository and notification contracts used by higher layers
-
-### Application
-
-The Application layer coordinates use cases.
-
-- Task and user services
-- Task filtering logic
-- DTOs used by the UI
-- Workflow orchestration without storage or console concerns
-
-### Infrastructure
-
-The Infrastructure layer provides technical implementations.
-
-- In-memory repositories for users and tasks
-- Console notification service
-- Time provider implementation
-
-### UI
-
-The UI layer provides the console experience.
-
-- Menu navigation
-- Dashboard summary
-- Table-style output rendering
-- Input validation and user guidance
-
-## Technologies Used
-
-- C#
-- .NET 10
-- Console Application
-- Object-Oriented Programming
-- Clean Architecture
-
-## How to Run the Project
-
-1. Clone or download the repository.
-2. Open a terminal in the project root.
-3. Restore dependencies:
-
-```powershell
-dotnet restore .\SmartTaskManager.sln
-```
-
-4. Build the solution:
-
-```powershell
-dotnet build .\SmartTaskManager.sln
-```
-
-5. Run the console application:
-
-```powershell
-dotnet run --project .\src\SmartTaskManager.UI.Console\SmartTaskManager.UI.Console.csproj
-```
-
-If needed, use this alternative build flow:
-
-```powershell
-dotnet msbuild .\SmartTaskManager.sln /t:Restore /m:1
-dotnet msbuild .\SmartTaskManager.sln /t:Build /m:1
-dotnet run --project .\src\SmartTaskManager.UI.Console\SmartTaskManager.UI.Console.csproj --no-build --no-restore
-```
-
-## Example Usage
-
-When the application starts, the user is presented with a dashboard and a grouped menu.
-
-Typical flow:
-
-1. Review the dashboard summary.
-2. List users or select an active user.
-3. Create a new task for that user.
-4. View tasks in a structured table.
-5. Update task priority, complete tasks, or archive them.
-6. Filter tasks by status or priority.
-7. View overdue tasks and inspect task history.
-
-The application also starts with sample users and tasks so the features can be explored immediately.
-
-## Project Structure
+## Solution Structure
 
 ```text
 SmartTaskManager/
 ├─ SmartTaskManager.sln
 ├─ README.md
 ├─ docs/
-│  └─ architecture.md
+│  ├─ architecture.md
+│  └─ web-architecture.md
 ├─ src/
 │  ├─ SmartTaskManager.Domain/
 │  ├─ SmartTaskManager.Application/
 │  ├─ SmartTaskManager.Infrastructure/
-│  └─ SmartTaskManager.UI.Console/
+│  ├─ SmartTaskManager.Api/
+│  └─ SmartTaskManager.Web/
 └─ tests/
    ├─ SmartTaskManager.Domain.Tests/
    ├─ SmartTaskManager.Application.Tests/
    └─ SmartTaskManager.Infrastructure.Tests/
 ```
 
-## Learning Goals
+## Project Roles
 
-This project demonstrates:
+### SmartTaskManager.Api
 
-- Object-oriented design with encapsulation, inheritance, and polymorphism
-- Clean Architecture and separation of concerns
-- Service and repository patterns
-- Console UI design and user flow improvements
-- AI-assisted development used to plan, implement, review, and refine the project
+`SmartTaskManager.Api` is the backend boundary of the system.
+
+Its responsibilities include:
+
+- exposing REST endpoints for users and tasks
+- returning dashboard summary data
+- handling task actions such as priority updates, completion, and archiving
+- issuing development JWT tokens for the front end
+- coordinating the Application and Infrastructure layers without leaking UI concerns
+
+### SmartTaskManager.Web
+
+`SmartTaskManager.Web` is the front-end project built with the modern Blazor Web App template using **server interactivity only**.
+
+Its responsibilities include:
+
+- layout, navigation, and page composition
+- managing the selected workspace user inside the Blazor circuit
+- calling the existing API through typed `HttpClient` services
+- handling form validation and user feedback
+- presenting dashboard metrics, lists, filters, details, and task actions in a clean UI
+
+There is **no separate `.Client` project**, which keeps the setup simpler for learning while still using the current Blazor programming model.
+
+## How the Front End Communicates with the API
+
+The front end does not duplicate business logic and does not call backend services directly.
+
+Instead, `SmartTaskManager.Web` communicates with `SmartTaskManager.Api` over HTTP through typed service classes:
+
+- `UsersApiClient`
+- `TasksApiClient`
+
+The API base URL is read from configuration:
+
+- Development: `src/SmartTaskManager.Web/appsettings.Development.json`
+- Production: `src/SmartTaskManager.Web/appsettings.Production.json`
+
+Typical request flow:
+
+1. The user opens the `Users` page.
+2. The Blazor app requests `GET /api/users`.
+3. When a user is selected, the app requests `POST /api/auth/token`.
+4. The returned JWT is stored in a scoped `UserSession`.
+5. Task pages send that bearer token to protected endpoints such as:
+   - `GET /api/users/{userId}/tasks`
+   - `GET /api/users/{userId}/tasks/dashboard`
+   - `GET /api/users/{userId}/tasks/{taskId}`
+   - `GET /api/users/{userId}/tasks/{taskId}/history`
+   - `PATCH /api/users/{userId}/tasks/{taskId}/priority`
+   - `PATCH /api/users/{userId}/tasks/{taskId}/complete`
+   - `PATCH /api/users/{userId}/tasks/{taskId}/archive`
+
+This keeps the architecture clean:
+
+```text
+Browser
+  -> SmartTaskManager.Web
+      -> SmartTaskManager.Api
+          -> Application / Domain / Infrastructure
+```
+
+## Main UI Features
+
+The Blazor front end currently includes:
+
+- dashboard summary with total, completed, pending, and overdue tasks
+- user selection and local workspace session management
+- task list with status and priority filtering
+- task cards with clear status and priority badges
+- task details view with history entries
+- create task form with client-side and API-backed validation
+- task actions for:
+  - update priority
+  - mark as completed
+  - archive
+- loading, empty, success, and error states designed for a polished portfolio presentation
+
+## Technologies Used
+
+- `.NET 10`
+- `C#`
+- `ASP.NET Core Web API`
+- `Blazor Web App`
+- `HttpClient` typed API clients
+- `SQL Server`
+- `JWT` authentication for protected API routes
+- Clean Architecture
+
+## How to Run Locally
+
+### Prerequisites
+
+- `.NET 10 SDK`
+- local SQL Server available for the API connection string
+- trusted local development HTTPS certificate
+
+If needed, trust the local HTTPS certificate once:
+
+```powershell
+dotnet dev-certs https --trust
+```
+
+### 1. Restore and Build
+
+From the solution root:
+
+```powershell
+dotnet restore .\SmartTaskManager.sln
+dotnet build .\SmartTaskManager.sln
+```
+
+### 2. Run the API
+
+Open a terminal and run:
+
+```powershell
+dotnet run --project .\src\SmartTaskManager.Api\SmartTaskManager.Api.csproj --launch-profile https
+```
+
+Expected development URLs:
+
+- `https://localhost:7081`
+- `http://localhost:5081`
+
+Swagger:
+
+- `https://localhost:7081/swagger`
+
+### 3. Run the Blazor Web App
+
+Open a second terminal and run:
+
+```powershell
+dotnet run --project .\src\SmartTaskManager.Web\SmartTaskManager.Web.csproj --launch-profile https
+```
+
+Expected development URLs:
+
+- `https://localhost:7036`
+- `http://localhost:5269`
+
+### 4. Open the App
+
+- Web front end: `https://localhost:7036`
+- API Swagger: `https://localhost:7081/swagger`
+
+Important:
+
+- `SmartTaskManager.Web` expects `SmartTaskManager.Api` to be running
+- if the web app reports that it cannot reach the API, check that the API is listening on `https://localhost:7081`
+
+## Front-End Notes
+
+The Blazor front end is intentionally simple in architecture:
+
+- one server-interactive UI project
+- typed `HttpClient` services for API access
+- thin pages
+- reusable shared components for layout, feedback, loading, empty states, and task presentation
+
+This keeps the code easy to follow while still reflecting real-world front-end patterns.
 
 ## Future Improvements
 
-- Replace in-memory storage with `EF Core` and `SQLite` or `SQL Server`
-- Add a web API or ASP.NET Core frontend
-- Build a desktop UI with `WPF`, `WinUI`, or `Blazor Hybrid`
+- add integration tests covering API-to-UI flows
+- persist user session state across browser refreshes
+- add authentication and authorization for real multi-user scenarios
+- introduce pagination and sorting for larger task lists
+- add deployment configuration for cloud hosting
+- improve observability with structured logging and health checks
+- extend the dashboard with charts or trend summaries
+
+## Why This Project Works Well in a Portfolio
+
+SmartTaskManager shows more than a basic CRUD app:
+
+- layered architecture with clear boundaries
+- API-first backend design
+- modern Blazor front end
+- typed service-based HTTP integration
+- realistic forms, validation, and task workflows
+- UI polish without excessive front-end complexity
+
+It demonstrates both software design discipline and practical full-stack `.NET` implementation.
 
 ## Author
 
