@@ -1,0 +1,285 @@
+@page "/tasks/{TaskId:guid}"
+@using UiTaskStatus = SmartTaskManager.Web.Models.TaskStatus
+@implements IDisposable
+@inject SmartTaskManagerApiClient ApiClient
+@inject UserSession UserSession
+
+<PageTitle>Task Details</PageTitle>
+
+<div class="page-stack">
+    <PageHeader
+        Eyebrow="Task details"
+        Title="Task details"
+        Description="Single-task view backed by the existing task and history endpoints.">
+        <Actions>
+            <a class="button button--ghost" href="/tasks">Back to tasks</a>
+        </Actions>
+    </PageHeader>
+
+    @if (!UserSession.HasActiveUser)
+    {
+        <EmptyState
+            Title="Task details require an active user"
+            Description="Select a user first so the web app can call the protected endpoints.">
+            <Actions>
+                <a class="button" href="/users">Choose user</a>
+            </Actions>
+        </EmptyState>
+    }
+    else if (_isLoading)
+    {
+        <div class="loading-panel">Loading task details...</div>
+    }
+    else if (_errorMessage is not null)
+    {
+        <div class="callout callout--danger">
+            <p>@_errorMessage</p>
+        </div>
+    }
+    else if (_task is not null)
+    {
+        @if (_statusMessage is not null)
+        {
+            <div class="callout callout--success">
+                <p>@_statusMessage</p>
+            </div>
+        }
+
+        <section class="panel">
+            <div class="panel__header">
+                <div>
+                    <p class="panel__eyebrow">Overview</p>
+                    <h2 class="panel__title">@_task.Title</h2>
+                </div>
+
+                <div class="task-card__actions">
+                    @if (_task.Status is not UiTaskStatus.Completed and not UiTaskStatus.Archived)
+                    {
+                        <button class="button button--ghost button--small" type="button" @onclick="CompleteTaskAsync" disabled="@_isBusy">
+                            Complete
+                        </button>
+                    }
+
+                    @if (_task.Status != UiTaskStatus.Archived)
+                    {
+                        <button class="button button--ghost button--small" type="button" @onclick="ArchiveTaskAsync" disabled="@_isBusy">
+                            Archive
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="detail-grid">
+                <article class="detail-card">
+                    <span>Status</span>
+                    <strong>@_task.Status</strong>
+                </article>
+                <article class="detail-card">
+                    <span>Priority</span>
+                    <strong>@_task.Priority</strong>
+                </article>
+                <article class="detail-card">
+                    <span>Category</span>
+                    <strong>@_task.CategoryName</strong>
+                </article>
+                <article class="detail-card">
+                    <span>Task type</span>
+                    <strong>@_task.TaskType</strong>
+                </article>
+                <article class="detail-card">
+                    <span>Due date</span>
+                    <strong>@_task.DueDate.ToLocalTime().ToString("dd MMM yyyy")</strong>
+                </article>
+                <article class="detail-card">
+                    <span>History entries</span>
+                    <strong>@_task.HistoryCount</strong>
+                </article>
+            </div>
+
+            <p class="task-card__description">@GetTaskDescription(_task)</p>
+        </section>
+
+        <section class="panel">
+            <div class="panel__header">
+                <div>
+                    <p class="panel__eyebrow">History</p>
+                    <h2 class="panel__title">Recorded lifecycle</h2>
+                </div>
+            </div>
+
+            @if (_history.Count == 0)
+            {
+                <EmptyState
+                    Title="No history entries"
+                    Description="This task has not recorded any state changes yet." />
+            }
+            else
+            {
+                <div class="history-list">
+                    @foreach (TaskHistoryEntry entry in _history)
+                    {
+                        <article class="history-entry">
+                            <span class="history-entry__time">@entry.OccurredOnUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                            <h3>@entry.Action</h3>
+                            <p>@entry.Details</p>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid TaskId { get; set; }
+
+    private bool _isLoading = true;
+    private bool _isBusy;
+    private string? _errorMessage;
+    private string? _statusMessage;
+    private TaskItem? _task;
+    private IReadOnlyCollection<TaskHistoryEntry> _history = Array.Empty<TaskHistoryEntry>();
+
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
+    private void HandleSessionChanged()
+    {
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync()
+    {
+        _errorMessage = null;
+        _task = null;
+        _history = Array.Empty<TaskHistoryEntry>();
+
+        if (!TryGetSession(out Guid userId, out string? accessToken))
+        {
+            _isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        _isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            Task<TaskItem> taskRequest = ApiClient.GetTaskAsync(userId, TaskId, accessToken!);
+            Task<IReadOnlyCollection<TaskHistoryEntry>> historyRequest = ApiClient.GetTaskHistoryAsync(userId, TaskId, accessToken!);
+
+            await Task.WhenAll(taskRequest, historyRequest);
+
+            _task = taskRequest.Result;
+            _history = historyRequest.Result
+                .OrderByDescending(entry => entry.OccurredOnUtc)
+                .ToList();
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task CompleteTaskAsync()
+    {
+        if (!TryGetSession(out Guid userId, out string? accessToken))
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+
+        try
+        {
+            TaskItem task = await ApiClient.CompleteTaskAsync(userId, TaskId, accessToken!);
+            _statusMessage = $"Marked '{task.Title}' as completed.";
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task ArchiveTaskAsync()
+    {
+        if (!TryGetSession(out Guid userId, out string? accessToken))
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+
+        try
+        {
+            TaskItem task = await ApiClient.ArchiveTaskAsync(userId, TaskId, accessToken!);
+            _statusMessage = $"Archived '{task.Title}'.";
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private bool TryGetSession(out Guid userId, out string? accessToken)
+    {
+        if (UserSession.CurrentUser is not null && UserSession.BearerToken is not null)
+        {
+            userId = UserSession.CurrentUser.Id;
+            accessToken = UserSession.BearerToken;
+            return true;
+        }
+
+        userId = Guid.Empty;
+        accessToken = null;
+        return false;
+    }
+
+    private static string GetTaskDescription(TaskItem task)
+    {
+        return string.IsNullOrWhiteSpace(task.Description)
+            ? "No description was provided for this task."
+            : task.Description;
+    }
+
+    private static string BuildErrorMessage(Exception exception)
+    {
+        return exception switch
+        {
+            SmartTaskManagerApiException apiException => apiException.Message,
+            HttpRequestException => "The web app could not reach the API. Start SmartTaskManager.Api and try again.",
+            _ => "The task details page could not complete the request."
+        };
+    }
+}

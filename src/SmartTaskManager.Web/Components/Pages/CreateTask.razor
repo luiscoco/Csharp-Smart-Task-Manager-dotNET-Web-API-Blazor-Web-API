@@ -1,0 +1,190 @@
+@page "/tasks/create"
+@inject NavigationManager NavigationManager
+@inject SmartTaskManagerApiClient ApiClient
+@inject UserSession UserSession
+
+<PageTitle>Create Task</PageTitle>
+
+<div class="page-stack">
+    <PageHeader
+        Eyebrow="Create task"
+        Title="Create a new task"
+        Description="This page posts directly to the existing protected task creation endpoint through the web app service layer.">
+        <Actions>
+            <a class="button button--ghost" href="/tasks">Back to tasks</a>
+        </Actions>
+    </PageHeader>
+
+    @if (!UserSession.HasActiveUser)
+    {
+        <EmptyState
+            Title="Create Task requires an active user"
+            Description="Select a user first so the web app can request a token and submit the task on that user's route.">
+            <Actions>
+                <a class="button" href="/users">Choose user</a>
+            </Actions>
+        </EmptyState>
+    }
+    else
+    {
+        @if (_errorMessage is not null)
+        {
+            <div class="callout callout--danger">
+                <p>@_errorMessage</p>
+            </div>
+        }
+
+        <div class="grid grid--2">
+            <section class="panel">
+                <div class="panel__header">
+                    <div>
+                        <p class="panel__eyebrow">Task form</p>
+                        <h2 class="panel__title">New task for @UserSession.CurrentUser!.UserName</h2>
+                    </div>
+                </div>
+
+                <EditForm Model="_form" OnValidSubmit="HandleSubmitAsync" class="field-grid">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="validation-summary" />
+
+                    <div class="field">
+                        <label class="field__label" for="title">Title</label>
+                        <InputText id="title" class="field__input" @bind-Value="_form.Title" />
+                        <ValidationMessage For="@(() => _form.Title)" />
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="description">Description</label>
+                        <InputTextArea id="description" class="field__textarea" @bind-Value="_form.Description" />
+                        <ValidationMessage For="@(() => _form.Description)" />
+                    </div>
+
+                    <div class="grid grid--2">
+                        <div class="field">
+                            <label class="field__label" for="dueDate">Due date</label>
+                            <InputDate id="dueDate" class="field__input" @bind-Value="_form.DueDate" />
+                            <ValidationMessage For="@(() => _form.DueDate)" />
+                        </div>
+
+                        <div class="field">
+                            <label class="field__label" for="priority">Priority</label>
+                            <InputSelect id="priority" class="field__input" @bind-Value="_form.Priority">
+                                @foreach (TaskPriority priority in Enum.GetValues<TaskPriority>())
+                                {
+                                    <option value="@priority">@priority</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+
+                    <div class="grid grid--2">
+                        <div class="field">
+                            <label class="field__label" for="taskType">Task type</label>
+                            <InputSelect id="taskType" class="field__input" @bind-Value="_form.TaskType">
+                                @foreach (TaskKind taskKind in Enum.GetValues<TaskKind>())
+                                {
+                                    <option value="@taskKind">@taskKind</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="field">
+                            <label class="field__label" for="category">Category</label>
+                            <InputText id="category" class="field__input" @bind-Value="_form.CategoryName" />
+                            <ValidationMessage For="@(() => _form.CategoryName)" />
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="button" type="submit" disabled="@_isSubmitting">Create task</button>
+                    </div>
+                </EditForm>
+            </section>
+
+            <section class="panel">
+                <div class="panel__header">
+                    <div>
+                        <p class="panel__eyebrow">Notes</p>
+                        <h2 class="panel__title">Why this page matters</h2>
+                    </div>
+                </div>
+
+                <div class="stack">
+                    <article class="detail-card">
+                        <span>Protected endpoint</span>
+                        <strong>The form submits with the selected user's bearer token.</strong>
+                    </article>
+                    <article class="detail-card">
+                        <span>Clean separation</span>
+                        <strong>The web app sends HTTP requests to the API instead of referencing backend services.</strong>
+                    </article>
+                    <article class="detail-card">
+                        <span>Course-friendly</span>
+                        <strong>All logic stays in one Blazor project with no extra .Client project to manage.</strong>
+                    </article>
+                </div>
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly CreateTaskFormModel _form = new();
+    private bool _isSubmitting;
+    private string? _errorMessage;
+
+    private async Task HandleSubmitAsync()
+    {
+        _errorMessage = null;
+
+        if (UserSession.CurrentUser is null || UserSession.BearerToken is null || _form.DueDate is null)
+        {
+            _errorMessage = "Select a user and provide a due date before submitting.";
+            return;
+        }
+
+        _isSubmitting = true;
+
+        try
+        {
+            CreateTaskRequest request = new(
+                _form.Title.Trim(),
+                (_form.Description ?? string.Empty).Trim(),
+                BuildDueDateUtc(_form.DueDate.Value),
+                _form.Priority,
+                string.IsNullOrWhiteSpace(_form.CategoryName) ? null : _form.CategoryName.Trim(),
+                _form.TaskType);
+
+            TaskItem createdTask = await ApiClient.CreateTaskAsync(
+                UserSession.CurrentUser.Id,
+                request,
+                UserSession.BearerToken);
+
+            NavigationManager.NavigateTo($"/tasks/{createdTask.Id}");
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private static DateTime BuildDueDateUtc(DateOnly dueDate)
+    {
+        DateTime localDateTime = dueDate.ToDateTime(new TimeOnly(23, 59), DateTimeKind.Local);
+        return localDateTime.ToUniversalTime();
+    }
+
+    private static string BuildErrorMessage(Exception exception)
+    {
+        return exception switch
+        {
+            SmartTaskManagerApiException apiException => apiException.Message,
+            HttpRequestException => "The web app could not reach the API. Start SmartTaskManager.Api and try again.",
+            _ => "The task could not be created."
+        };
+    }
+}

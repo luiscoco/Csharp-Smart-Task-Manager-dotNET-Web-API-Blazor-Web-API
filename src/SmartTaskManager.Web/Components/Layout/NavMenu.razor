@@ -1,0 +1,59 @@
+@implements IDisposable
+@inject UserSession UserSession
+
+<nav class="nav-menu">
+    <section class="nav-menu__section">
+        <span class="nav-menu__caption">Pages</span>
+
+        <div class="nav-menu__links">
+            <NavLink class="nav-menu__link" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+            <NavLink class="nav-menu__link" href="/users">Users</NavLink>
+            <NavLink class="nav-menu__link" href="/tasks">Tasks</NavLink>
+            <NavLink class="nav-menu__link" href="/tasks/create">Create Task</NavLink>
+        </div>
+    </section>
+
+    <section class="nav-menu__section">
+        <span class="nav-menu__caption">Session</span>
+
+        @if (UserSession.HasActiveUser)
+        {
+            <div class="nav-menu__session">
+                <strong>@UserSession.CurrentUser!.UserName</strong>
+                <span>Created @UserSession.CurrentUser.CreatedOnUtc.ToLocalTime().ToString("d")</span>
+                <button class="button button--ghost button--small" type="button" @onclick="ClearSession">
+                    Clear session
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="nav-menu__session nav-menu__session--empty">
+                <strong>No user selected</strong>
+                <span>Choose a user to request a development token and unlock task pages.</span>
+            </div>
+        }
+    </section>
+</nav>
+
+@code {
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
+    private void ClearSession()
+    {
+        UserSession.Clear();
+    }
+
+    private void HandleSessionChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+}

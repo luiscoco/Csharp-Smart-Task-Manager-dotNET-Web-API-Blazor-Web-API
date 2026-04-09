@@ -1,0 +1,71 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject UserSession UserSession
+
+<div class="shell">
+    <aside class="shell__sidebar">
+        <a class="brand-panel" href="/">
+            <span class="brand-panel__eyebrow">Portfolio Front End</span>
+            <strong>Smart Task Manager</strong>
+            <span class="brand-panel__meta">Blazor Web App with server interactivity</span>
+        </a>
+
+        <NavMenu />
+    </aside>
+
+    <div class="shell__main">
+        <header class="shell__header">
+            <div class="shell__intro">
+                <p class="shell__eyebrow">Connected Workspace</p>
+                <h2>Manage users and tasks through the existing SmartTaskManager Web API.</h2>
+            </div>
+
+            <section class="session-panel @(UserSession.HasActiveUser ? "session-panel--active" : string.Empty)">
+                <span class="session-panel__label">Workspace user</span>
+
+                @if (UserSession.HasActiveUser)
+                {
+                    <strong>@UserSession.CurrentUser!.UserName</strong>
+                    <span>Development token valid until @FormatTokenExpiry()</span>
+                }
+                else
+                {
+                    <strong>No active user</strong>
+                    <span>Open the Users page to start a session.</span>
+                }
+            </section>
+        </header>
+
+        <article class="shell__content">
+            @Body
+        </article>
+    </div>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error interrupted the current request.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">x</span>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
+    private void HandleSessionChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string FormatTokenExpiry()
+    {
+        return UserSession.TokenExpiresAtUtc?.ToLocalTime().ToString("g") ?? "unknown";
+    }
+}

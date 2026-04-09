@@ -1,0 +1,225 @@
+@page "/users"
+@inject SmartTaskManagerApiClient ApiClient
+@inject UserSession UserSession
+
+<PageTitle>Users</PageTitle>
+
+<div class="page-stack">
+    <PageHeader
+        Eyebrow="Users"
+        Title="Workspace users"
+        Description="Create a local user or select an existing one to start a development session against the API.">
+        <Actions>
+            <button class="button button--ghost" type="button" @onclick="LoadUsersAsync" disabled="@_isLoading">
+                Refresh users
+            </button>
+        </Actions>
+    </PageHeader>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="callout callout--danger">
+            <p>@_errorMessage</p>
+        </div>
+    }
+
+    @if (_statusMessage is not null)
+    {
+        <div class="callout callout--success">
+            <p>@_statusMessage</p>
+        </div>
+    }
+
+    <div class="grid grid--2">
+        <section class="panel">
+            <div class="panel__header">
+                <div>
+                    <p class="panel__eyebrow">Existing profiles</p>
+                    <h2 class="panel__title">Choose the active user</h2>
+                </div>
+            </div>
+
+            @if (_isLoading)
+            {
+                <div class="loading-panel">Loading users from the API...</div>
+            }
+            else if (_users.Count == 0)
+            {
+                <EmptyState
+                    Title="No users were returned"
+                    Description="Create a user to start testing the API-driven task flows." />
+            }
+            else
+            {
+                <div class="stack">
+                    @foreach (UserSummary user in _users)
+                    {
+                        bool isActive = IsActiveUser(user);
+
+                        <article class="user-card @(isActive ? "user-card--active" : string.Empty)">
+                            <div>
+                                <h3>@user.UserName</h3>
+                                <p>Created @user.CreatedOnUtc.ToLocalTime().ToString("dd MMM yyyy")</p>
+                            </div>
+
+                            <div class="task-card__actions">
+                                <button
+                                    class="button @(isActive ? "button--ghost" : "button--secondary") button--small"
+                                    type="button"
+                                    @onclick="@(() => ActivateUserAsync(user))"
+                                    disabled="@(_busyUserId == user.Id)">
+                                    @(isActive ? "Active user" : "Use this user")
+                                </button>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="panel">
+            <div class="panel__header">
+                <div>
+                    <p class="panel__eyebrow">New profile</p>
+                    <h2 class="panel__title">Create a user</h2>
+                </div>
+            </div>
+
+            <EditForm Model="_form" OnValidSubmit="HandleCreateUserAsync" class="field-grid">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="validation-summary" />
+
+                <div class="field">
+                    <label class="field__label" for="userName">User name</label>
+                    <InputText id="userName" class="field__input" @bind-Value="_form.UserName" />
+                    <ValidationMessage For="@(() => _form.UserName)" />
+                </div>
+
+                <div class="form-actions">
+                    <button class="button" type="submit" disabled="@_isSubmitting">
+                        Create and activate
+                    </button>
+                </div>
+            </EditForm>
+
+            @if (UserSession.HasActiveUser && UserSession.CurrentUser is not null)
+            {
+                <div class="session-card">
+                    <h3>Current session</h3>
+                    <p>@UserSession.CurrentUser.UserName is active in this Blazor circuit.</p>
+                    <div class="task-card__actions">
+                        <button class="button button--ghost button--small" type="button" @onclick="ClearSession">
+                            Clear session
+                        </button>
+                    </div>
+                </div>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    private readonly CreateUserFormModel _form = new();
+    private bool _isLoading = true;
+    private bool _isSubmitting;
+    private Guid? _busyUserId;
+    private string? _errorMessage;
+    private string? _statusMessage;
+    private IReadOnlyCollection<UserSummary> _users = Array.Empty<UserSummary>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            _users = await ApiClient.GetUsersAsync();
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleCreateUserAsync()
+    {
+        _isSubmitting = true;
+        _errorMessage = null;
+        _statusMessage = null;
+
+        try
+        {
+            UserSummary createdUser = await ApiClient.CreateUserAsync(
+                new CreateUserRequest(_form.UserName.Trim()));
+
+            _users = _users
+                .Append(createdUser)
+                .OrderBy(user => user.UserName)
+                .ToList();
+
+            _form.UserName = string.Empty;
+
+            await ActivateUserAsync(createdUser, $"Created {createdUser.UserName} and started a workspace session.");
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task ActivateUserAsync(UserSummary user, string? successMessage = null)
+    {
+        _busyUserId = user.Id;
+        _errorMessage = null;
+
+        try
+        {
+            AccessTokenResult token = await ApiClient.CreateTokenAsync(user.UserName);
+            UserSession.Start(user, token);
+            _statusMessage = successMessage ?? $"{user.UserName} is now the active workspace user.";
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = BuildErrorMessage(exception);
+        }
+        finally
+        {
+            _busyUserId = null;
+        }
+    }
+
+    private void ClearSession()
+    {
+        UserSession.Clear();
+        _statusMessage = "The workspace session was cleared.";
+    }
+
+    private bool IsActiveUser(UserSummary user)
+    {
+        return UserSession.CurrentUser?.Id == user.Id;
+    }
+
+    private static string BuildErrorMessage(Exception exception)
+    {
+        return exception switch
+        {
+            SmartTaskManagerApiException apiException => apiException.Message,
+            HttpRequestException => "The web app could not reach the API. Start SmartTaskManager.Api and try again.",
+            _ => "The users page could not complete the request."
+        };
+    }
+}
